@@ -2503,33 +2503,6 @@ function cvReport(db, cv) {
   return { title: 'Currículo ' + a.name, file: 'Curriculo_' + safe(a.name) + '_' + safe(span), blocks, landscape: false };
 }
 
-function recordsReport(db, mode, period) {
-  const rs = C.recordsSummary(db, mode, period);
-  const obj = o => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ': ' + v).join(' · ');
-  const pp = C.prevPeriod(db, mode, period); const prs = pp ? C.recordsSummary(db, mode, pp) : null;
-  const blocks = [{ t: 'title', text: 'Recordes Nacionais' }, { t: 'sub', text: periodLabel(mode, period) + ' · Natação Pura' + (pp ? ' · comparação com ' + pp : '') }];
-  const cnt = (list, f) => list.filter(f).length;
-  blocks.push({ t: 'kpis', items: [{ label: 'Recordes Nacionais', value: rs.recs.length, delta: prs ? dlt(rs.recs.length, prs.recs.length) : '' }, { label: 'Absolutos', value: cnt(rs.recs, r => /abs/i.test(r.type)), delta: prs ? dlt(cnt(rs.recs, r => /abs/i.test(r.type)), cnt(prs.recs, r => /abs/i.test(r.type))) : '' },
-    { label: 'Em Seleção Nacional', value: cnt(rs.recs, r => r.quem === 'Seleção Nacional'), delta: prs ? dlt(cnt(rs.recs, r => r.quem === 'Seleção Nacional'), cnt(prs.recs, r => r.quem === 'Seleção Nacional')) : '' }, { label: 'Nadadores recordistas', value: new Set(rs.recs.filter(r => !(C.parseEvent(r.event) || {}).relay).flatMap(r => r.athleteIds)).size }] });
-  const abs = rs.recs.filter(r => /abs/i.test(r.type)).slice().reverse().slice(0, 10);
-  if (abs.length) { blocks.push({ t: 'h', text: 'Recordes absolutos' }); blocks.push({ t: 'list', items: abs.map(r => '{rn} ' + r.classe + ' — ' + r.holder + ' · ' + T(r.time) + ' (' + D(r.date) + ', ' + r.place + ')') }); }
-  blocks.push({ t: 'imgs', items: [img({ type: 'bar', data: { labels: rs.evolution.map(e => e.period), datasets: [{ label: 'Seleção Nacional', data: rs.evolution.map(e => e.selecao), backgroundColor: CC.navy }, { label: 'Clube', data: rs.evolution.map(e => e.clube), backgroundColor: CC.lblue }, { label: 'Sel. Territorial', data: rs.evolution.map(e => e.territorial), backgroundColor: CC.gold }] }, options: { scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } }, 82, 60, 'Evolução e contexto'),
-    img({ type: 'doughnut', data: { labels: Object.keys(rs.byCat), datasets: [{ data: Object.values(rs.byCat), backgroundColor: [CC.navy, CC.blue, CC.gold, CC.teal, CC.coral, CC.lblue] }] }, options: { plugins: { legend: { position: 'right' } } } }, 82, 60, 'Por categoria')] });
-  blocks.push({ t: 'pagebreak' });
-  blocks.push({ t: 'kv', rows: [['Total de recordes', rs.recs.length], ['Por tipo', obj(rs.byType)], ['Por contexto', obj(rs.byQuem)], ['Por piscina', obj(rs.byPool)], ['Por categoria', obj(rs.byCat)], ['Por sexo', obj(rs.bySex)]] });
-  blocks.push({ t: 'h', text: 'Evolução por ' + (mode === 'ano' ? 'ano civil' : 'época') });
-  blocks.push({ t: 'table', head: [mode === 'ano' ? 'Ano' : 'Época', 'Total', 'Absolutos', 'Categoria', 'Seleção Nacional', 'Clube', 'Sel. Territorial', 'P50', 'P25'],
-    rows: rs.evolution.map(e => [e.period, e.total, e.absoluto, e.categoria, e.selecao, e.clube, e.territorial, e.p50, e.p25]), widths: [8, 5, 6, 6, 7, 5, 7, 4, 4], align: [null].concat(Array(8).fill('c')) });
-  if (rs.topHolders.length) {
-    blocks.push({ t: 'h', text: 'Nadadores com mais recordes individuais' });
-    blocks.push({ t: 'table', head: ['Nadador', 'Recordes'], rows: rs.topHolders.map(h => [h.athlete ? h.athlete.name : '?', h.n]), widths: [5, 1], align: [null, 'c'] });
-  }
-  blocks.push({ t: 'h', text: 'Lista de recordes' });
-  blocks.push({ t: 'table', head: ['Data', 'Prova / Classe', 'Titular', 'Tempo', 'Clube', 'Local', 'Piscina', 'Tipo', 'Contexto'],
-    rows: rs.recs.map(r => [D(r.date) + (r.dateEstimated ? '*' : ''), r.classe, r.holder, T(r.time), r.club, r.place, r.pool, r.type, r.quem]), widths: [7, 13, 26, 6, 6, 8, 5, 7, 9], align: ['c', null, null, 'r', null, null, 'c', null, null], small: true });
-  if (rs.recs.some(r => r.dateEstimated)) blocks.push({ t: 'p', text: '* Data em falta no registo de origem (assumida a da linha anterior).', small: true, muted: true });
-  return { title: 'Recordes ' + periodLabel(mode, period), file: 'Recordes_' + safe(periodLabel(mode, period)), blocks, landscape: false };
-}
 /* ---------- Convocatória (formato FPN) ---------- */
 function fmtDM(iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : ''; }
 function convDaysList(v) {
@@ -2703,21 +2676,6 @@ function synthesisComp(db, comp) {
   if (pt) blocks.push({ t: 'h2', text: 'Comparação com a edição anterior (' + (pe.start || '').slice(0, 4) + ')' }, { t: 'table', head: ['Indicador', (pe.start || '').slice(0, 4), (comp.start || '').slice(0, 4), 'Variação'], rows: [['Nadadores', pt.atletas, t.atletas, dlt(t.atletas, pt.atletas)], ['Provas nadadas', pt.nados, t.nados, dlt(t.nados, pt.nados)], ['Medalhas', pt.podios, t.podios, dlt(t.podios, pt.podios)], ['Finais A', pt.finalA, t.finalA, dlt(t.finalA, pt.finalA)], ['% RP', P(pt.pctRP), P(t.pctRP), dlt(t.pctRP, pt.pctRP, true)], ['% RP médio', P(pt.pctMedio), P(t.pctMedio), dlt(t.pctMedio, pt.pctMedio, true)]].map(r => r.map(x => String(x == null ? '' : x).replace(/▲/g, '+').replace(/▼/g, '−'))), widths: [12, 6, 6, 8], align: [null, 'c', 'c', 'c'] });
   return blocks;
 }
-function nadadoresReport(db, mode, period) {
-  const sm = db.meta.seasonStartMonth;
-  const rs = db.results.filter(r => C.inPeriod(r.date, mode, period, sm));
-  const ids = new Set(); rs.forEach(r => { if (r.athleteId) ids.add(r.athleteId); });
-  const rows = [...ids].map(id => { const a = C.athById(db, id); const ind = rs.filter(r => r.athleteId === id); const s = C.summarize(db, ind); const rn = db.records.filter(x => x.athleteIds.includes(id) && C.inPeriod(x.date, mode, period, sm)).length; return { a, s, rn }; }).filter(x => x.a)
-    .sort((x, y) => y.s.ouro - x.s.ouro || y.s.podios - x.s.podios || y.s.finalA - x.s.finalA || y.rn - x.rn || x.a.name.localeCompare(y.a.name));
-  const blocks = [{ t: 'title', text: 'Nadadores internacionais' }, { t: 'sub', text: periodLabel(mode, period) + ' · Natação Pura' }];
-  blocks.push({ t: 'kpis', items: [{ label: 'Nadadores', value: rows.length, sub: rows.filter(x => x.a.sex === 'F').length + ' F · ' + rows.filter(x => x.a.sex === 'M').length + ' M' }, { label: 'Medalhados', value: rows.filter(x => x.s.podios).length }, { label: 'Finalistas A', value: rows.filter(x => x.s.finalA).length }, { label: 'Com Recorde Nacional', value: rows.filter(x => x.rn).length }] });
-  const top = rows.filter(x => x.s.podios).slice(0, 12);
-  if (top.length) blocks.push({ t: 'img', ...img({ type: 'bar', data: { labels: top.map(x => x.a.name), datasets: [{ label: 'Ouro', data: top.map(x => x.s.ouro), backgroundColor: CC.ouro }, { label: 'Prata', data: top.map(x => x.s.prata), backgroundColor: CC.prata }, { label: 'Bronze', data: top.map(x => x.s.bronze), backgroundColor: CC.bronze }] }, options: { indexAxis: 'y', scales: { x: { stacked: true }, y: { stacked: true, ticks: { font: { size: 9 } } } } } }, 160, Math.max(45, top.length * 6 + 15)), caption: 'Nadadores com mais medalhas' });
-  blocks.push({ t: 'h', text: 'Quadro de nadadores' });
-  blocks.push({ t: 'table', head: ['Nadador', 'Clube', 'Comp.', 'Provas', 'RP', '% RP', 'Medalhas', 'Final A', 'RN'], rows: rows.map(x => [x.a.name, x.a.club || '', new Set(rs.filter(r => r.athleteId === x.a.id).map(r => r.compId)).size, x.s.nados, x.s.rp, P(x.s.pctRP), (x.s.ouro ? '{ouro}' : '') + (x.s.prata ? '{prata}' : '') + (x.s.bronze ? '{bronze}' : '') + ' ' + (x.s.podios ? x.s.ouro + '/' + x.s.prata + '/' + x.s.bronze : ''), x.s.finalA, x.rn || '']),
-    widths: [20, 7, 5, 5, 4, 6, 11, 5, 4], align: [null, null, 'c', 'c', 'c', 'c', null, 'c', 'c'], small: true });
-  return { title: 'Nadadores ' + periodLabel(mode, period), file: 'Nadadores_' + safe(periodLabel(mode, period)), blocks };
-}
 function cvShortReport(db, cv) {
   const a = cv.athlete; const t = cv.total;
   const span = cv.periods.length ? (cv.periods[0] === cv.periods[cv.periods.length - 1] ? cv.periods[0] : cv.periods[0] + ' – ' + cv.periods[cv.periods.length - 1]) : '—';
@@ -2732,6 +2690,143 @@ function cvShortReport(db, cv) {
   const best = cv.bests.filter(b => C.isOlympic(b.event)).slice(0, 8);
   if (best.length) { blocks.push({ t: 'h', text: 'Melhores marcas em competição internacional' }); blocks.push({ t: 'table', head: ['Prova', 'Piscina', 'Tempo', 'Competição', 'Data'], rows: best.map(b => [b.event, b.pool, T(b.time), b.comp, D(b.date)]), widths: [10, 5, 6, 26, 7], align: [null, 'c', 'r', null, 'c'], small: true }); }
   return { title: 'Currículo ' + a.name, file: 'Curriculo_sintese_' + safe(a.name), blocks };
+}
+/* ---------- Relatórios dos separadores ---------- */
+const MED_HEAD = ['{ouro}', '{prata}', '{bronze}'];
+const TIER_NAMES = { 1: 'Jogos Olímpicos', 2: 'Campeonatos do Mundo', 3: 'Campeonatos da Europa', 4: 'Outros Jogos multidesportivos' };
+function filtLabel(f) { return Object.entries(f || {}).filter(([k, v]) => v).map(([k, v]) => ({ tier: { p: 'Jogos, Mundiais e Europeus', o: 'Outras competições', 1: 'Jogos Olímpicos', 2: 'Campeonatos do Mundo', 3: 'Campeonatos da Europa', 4: 'Outros Jogos' }[v] || v, sexo: C.sexLabel(v), escalao: v, clube: 'Clube ' + v, quem: v, tipo: v, q: '"' + v + '"' }[k])).join(' · '); }
+function compPass(c, f) { const t = C.compTier(c); const ft = (f || {}).tier; return !ft || (ft === 'p' ? !!t : ft === 'o' ? !t : (t || {}).tier === +ft); }
+function medTxt(s) { return [s.ouro || '', s.prata || '', s.bronze || '']; }
+/* Competições */
+function competicoesReport(db, mode, period, f) {
+  f = f || {};
+  const sm = db.meta.seasonStartMonth;
+  const comps = db.competitions.filter(c => c.start && C.inPeriod(c.start, mode, period, sm) && compPass(c, f) && (!f.q || C.norm(c.name + ' ' + c.city + ' ' + c.country).includes(C.norm(f.q)))).sort((a, b) => a.start.localeCompare(b.start));
+  const ids = new Set(comps.map(c => c.id));
+  const rs = C.enrich(db, db.results.filter(r => ids.has(r.compId)));
+  const s = C.summarize(db, rs); s.rnPeriodo = db.records.filter(r => ids.has(r.compId)).length; s.rnSel = db.records.filter(r => ids.has(r.compId) && r.quem === 'Seleção Nacional').length;
+  const pp = C.prevPeriod(db, mode, period); let prev = null;
+  if (pp) { const pc = new Set(db.competitions.filter(c => c.start && C.inPeriod(c.start, mode, pp, sm) && compPass(c, f)).map(c => c.id)); prev = C.summarize(db, db.results.filter(r => pc.has(r.compId))); prev.rnPeriodo = db.records.filter(r => pc.has(r.compId)).length; prev.rnSel = db.records.filter(r => pc.has(r.compId) && r.quem === 'Seleção Nacional').length; }
+  const fl = filtLabel(f);
+  const blocks = [{ t: 'title', text: 'Competições internacionais' }, { t: 'sub', text: periodLabel(mode, period) + (fl ? ' · ' + fl : '') + ' · Natação Pura' + (pp ? ' · comparação com ' + pp : '') }];
+  blocks.push({ t: 'kpis', items: kpiSet(s, prev) });
+  const per = C.periodsOf(db, mode).slice(-5);
+  const evo = per.map(p => { const ids2 = new Set(db.competitions.filter(c => c.start && C.inPeriod(c.start, mode, p, sm) && compPass(c, f)).map(c => c.id)); const g = C.summarize(db, db.results.filter(r => ids2.has(r.compId))); g.n = ids2.size; return g; });
+  blocks.push({ t: 'imgs', items: [img({ type: 'bar', data: { labels: comps.map(c => c.name.length > 24 ? c.name.slice(0, 23) + '…' : c.name), datasets: [{ label: 'Ouro', data: comps.map(c => C.summarize(db, rs.filter(r => r.compId === c.id)).ouro), backgroundColor: CC.ouro }, { label: 'Prata', data: comps.map(c => C.summarize(db, rs.filter(r => r.compId === c.id)).prata), backgroundColor: CC.prata }, { label: 'Bronze', data: comps.map(c => C.summarize(db, rs.filter(r => r.compId === c.id)).bronze), backgroundColor: CC.bronze }, { label: 'Finais A', data: comps.map(c => C.summarize(db, rs.filter(r => r.compId === c.id)).finalA), backgroundColor: CC.navy }] }, options: { indexAxis: 'y', scales: { x: { stacked: true, beginAtZero: true }, y: { stacked: true, ticks: { font: { size: 8 } } } } } }, 92, Math.max(50, Math.min(80, comps.length * 3.5 + 15)), 'Medalhas e finais A por competição'),
+    img({ type: 'bar', data: { labels: per, datasets: [{ label: 'Competições', data: evo.map(x => x.n), backgroundColor: CC.lblue }, { label: 'Medalhas', data: evo.map(x => x.podios), backgroundColor: CC.gold }, { label: 'Finais A', data: evo.map(x => x.finalA), backgroundColor: CC.navy }] }, options: { scales: { y: { beginAtZero: true } } } }, 78, 60, 'Evolução por ' + (mode === 'ano' ? 'ano civil' : 'época'))] });
+  // destaques
+  const hl = [];
+  const meds = rs.filter(r => C.MEDAL_PHASES.has(r.phase) && r.place >= 1 && r.place <= 3).map(r => ({ r, c: C.compById(db, r.compId), t: C.compTier(C.compById(db, r.compId)) })).sort((a, b) => ((a.t || { order: 99 }).order - (b.t || { order: 99 }).order) || a.r.place - b.r.place);
+  meds.slice(0, 6).forEach(m => hl.push(['', '{ouro}', '{prata}', '{bronze}'][m.r.place] + ' ' + athName(db, m.r) + ' — ' + m.r.event + ', ' + (m.t ? m.t.label : m.c.name) + ' · ' + T(m.r.time)));
+  if (meds.length > 6) hl.push('… e mais ' + (meds.length - 6) + ' pódios (ver fichas por competição).');
+  const best = comps.map(c => ({ c, s: C.summarize(db, rs.filter(r => r.compId === c.id)) })).filter(x => x.s.pctMedio && x.s.nados >= 10).sort((a, b) => b.s.pctMedio - a.s.pctMedio);
+  if (best.length > 1) hl.push('Melhor % RP médio: ' + best[0].c.name + ' (' + P(best[0].s.pctMedio) + '); mais baixo: ' + best[best.length - 1].c.name + ' (' + P(best[best.length - 1].s.pctMedio) + ').');
+  if (hl.length) { blocks.push({ t: 'h', text: 'Destaques' }); blocks.push({ t: 'list', items: hl }); }
+  // por tipo de competição
+  const groups = {}; comps.forEach(c => { const t = C.compTier(c); const k = t ? t.tier : 9; (groups[k] = groups[k] || []).push(c); });
+  const grows = Object.keys(groups).sort().map(k => { const set = new Set(groups[k].map(c => c.id)); const g = C.summarize(db, rs.filter(r => set.has(r.compId))); return [TIER_NAMES[k] || 'Outras competições', groups[k].length, g.atletas, g.nados, P(g.pctRP), P(g.pctMedio)].concat(medTxt(g), [g.finalA, db.records.filter(r => set.has(r.compId)).length || '']); });
+  blocks.push({ t: 'h', text: 'Por tipo de competição' });
+  blocks.push({ t: 'table', head: ['Tipo', 'Comp.', 'Nad.', 'Provas', '% RP', '% RP méd.'].concat(MED_HEAD, ['Final A', 'RN']), rows: grows, widths: [22, 5, 5, 6, 6, 7, 4, 4, 4, 6, 4], align: [null].concat(Array(10).fill('c')) });
+  blocks.push({ t: 'p', text: LEGEND, small: true, muted: true });
+  // quadro resumo
+  blocks.push({ t: 'h', text: 'Quadro resumo (' + comps.length + ' competições)' });
+  blocks.push({ t: 'table', head: ['Data', 'Competição', 'Local', 'Escalões', 'Nad.', 'Provas', '% RP', '% RP méd.'].concat(MED_HEAD, ['Final A', 'RN']),
+    rows: comps.map(c => { const cs = C.compSummary(db, c); const t = cs.total; return [D(c.start), c.name, c.city || '', cs.escaloes.map(e => e.escalao.slice(0, 3) + '.').join(' '), t.atletas, t.nados, P(t.pctRP), P(t.pctMedio)].concat(medTxt(t), [t.finalA || '', t.rnComp || '']); }),
+    widths: [8, 24, 9, 8, 4, 5, 6, 6, 3, 3, 3, 5, 3], align: ['c', null, null, null, 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c'], small: true });
+  // fichas
+  blocks.push({ t: 'h', text: 'Fichas por competição' });
+  for (const c of comps.slice().reverse()) {
+    const cs = C.compSummary(db, c); const t = cs.total; const tier = C.compTier(c);
+    const crs = rs.filter(r => r.compId === c.id);
+    blocks.push({ t: 'h2', text: D(c.start) + ' · ' + c.name + (c.city ? ' — ' + c.city : '') + (tier ? ' · ' + tier.label : '') });
+    blocks.push({ t: 'table', head: ['Nadadores', 'Provas', 'RP', '% RP', '% RP médio'].concat(MED_HEAD, ['Final A', 'Final B', 'RN']), rows: [[t.atletas, t.nados, t.rp, P(t.pctRP), P(t.pctMedio)].concat(medTxt(t), [t.finalA, t.finalB, t.rnComp || ''])], widths: [6, 5, 4, 5, 6, 3, 3, 3, 5, 5, 3], align: Array(11).fill('c'), small: true });
+    const items = [];
+    crs.filter(r => C.MEDAL_PHASES.has(r.phase) && r.place >= 1 && r.place <= 3).sort((a, b) => a.place - b.place).forEach(r => items.push(['', '{ouro}', '{prata}', '{bronze}'][r.place] + ' ' + athName(db, r) + ' — ' + r.event + ' · ' + T(r.time) + (r.rn ? ' {rn}' : '')));
+    const fa = crs.filter(r => r.phase === 'Final A' && !(r.place <= 3));
+    if (fa.length) items.push('Finais A: ' + fa.map(r => athName(db, r) + ' (' + r.event + ', ' + C.placeLabel(r) + ')').join('; '));
+    if (cs.records.length) items.push('{rn} RN: ' + cs.records.map(r => r.classe + ' ' + T(r.time)).join('; '));
+    if (items.length) blocks.push({ t: 'list', items });
+  }
+  return { title: 'Competições ' + periodLabel(mode, period), file: 'Competicoes_' + safe(periodLabel(mode, period)), blocks };
+}
+/* Nadadores */
+function bestResult(db, rs) {
+  const cand = rs.filter(r => r.place).map(r => ({ r, t: C.compTier(C.compById(db, r.compId)) }));
+  cand.sort((a, b) => ((a.t || { order: 99 }).order - (b.t || { order: 99 }).order) || (C.MEDAL_PHASES.has(b.r.phase) - C.MEDAL_PHASES.has(a.r.phase)) || (C.FINAL_PHASES.has(b.r.phase) - C.FINAL_PHASES.has(a.r.phase)) || a.r.place - b.r.place);
+  const x = cand[0]; if (!x) return '';
+  const lab = x.t ? x.t.label.replace('Campeonato da Europa', 'CE').replace('Campeonato do Mundo', 'CM').replace('Jogos Olímpicos', 'JO').replace(' de Juniores', ' Jun').replace('Jogos do Mediterrâneo', 'JM') : (C.compById(db, x.r.compId) || {}).name || '';
+  return (C.MEDAL_PHASES.has(x.r.phase) && x.r.place <= 3 ? ['', '{ouro}', '{prata}', '{bronze}'][x.r.place] + ' ' : '') + x.r.place + '.º ' + x.r.event + (x.r.phase !== 'Final A' && x.r.phase !== 'Final Direta' ? ' (' + x.r.phase + ')' : '') + ' · ' + lab;
+}
+function nadadoresReport(db, mode, period, f) {
+  f = f || {};
+  const sm = db.meta.seasonStartMonth;
+  const stat = (p) => {
+    const rs = C.enrich(db, db.results.filter(r => C.inPeriod(r.date, mode, p, sm)));
+    const ids = new Set(); rs.forEach(r => { if (r.athleteId) ids.add(r.athleteId); });
+    return [...ids].map(id => { const a = C.athById(db, id); if (!a) return null; const ind = rs.filter(r => r.athleteId === id); const s = C.summarize(db, ind);
+      const esc = {}; ind.forEach(r => { esc[r.escalao] = (esc[r.escalao] || 0) + 1; }); const e = Object.entries(esc).sort((x, y) => y[1] - x[1])[0];
+      return { a, s, ind, esc: e ? e[0] : '', comps: new Set(rs.filter(r => r.athleteId === id || (r.members || []).includes(id)).map(r => r.compId)).size, rn: db.records.filter(x => x.athleteIds.includes(id) && C.inPeriod(x.date, mode, p, sm)).length }; })
+      .filter(x => x && (!f.sexo || x.a.sex === f.sexo) && (!f.escalao || x.esc === f.escalao) && (!f.clube || x.a.club === f.clube) && (!f.q || C.norm(x.a.name + ' ' + (x.a.club || '')).includes(C.norm(f.q))));
+  };
+  const rows = stat(period); const pp = C.prevPeriod(db, mode, period); const prows = pp ? stat(pp) : null;
+  const first = {}; for (const r of db.results) if (r.athleteId && r.date && (!first[r.athleteId] || r.date < first[r.athleteId])) first[r.athleteId] = r.date;
+  const estreias = rows.filter(x => C.inPeriod(first[x.a.id], mode, period, sm));
+  const cnt = (list, fn) => list ? list.filter(fn).length : null;
+  const fl = filtLabel(f);
+  const blocks = [{ t: 'title', text: 'Nadadores internacionais' }, { t: 'sub', text: periodLabel(mode, period) + (fl ? ' · ' + fl : '') + ' · Natação Pura' + (pp ? ' · comparação com ' + pp : '') }];
+  const k = (label, list, fn, sub) => ({ label, value: fn ? cnt(list, fn) : list.length, sub, delta: prows ? dlt(fn ? cnt(list, fn) : list.length, fn ? cnt(prows, fn) : prows.length) : '' });
+  blocks.push({ t: 'kpis', items: [k('Nadadores', rows, null, cnt(rows, x => x.a.sex === 'F') + ' F · ' + cnt(rows, x => x.a.sex === 'M') + ' M'), { label: 'Estreias internacionais', value: estreias.length }, k('Medalhados', rows, x => x.s.podios), k('Finalistas A', rows, x => x.s.finalA),
+    k('Com RP', rows, x => x.s.rp), k('Com Recorde Nacional', rows, x => x.rn), { label: 'Clubes representados', value: new Set(rows.map(x => x.a.club).filter(Boolean)).size }, { label: '% RP médio', value: P(C.summarize(db, rows.flatMap(x => x.ind)).pctMedio) || '—' }] });
+  const top = rows.filter(x => x.s.podios || x.s.finalA).sort((a, b) => b.s.ouro - a.s.ouro || b.s.podios - a.s.podios || b.s.finalA - a.s.finalA).slice(0, 8);
+  if (top.length) { blocks.push({ t: 'h', text: 'Destaques' }); blocks.push({ t: 'list', items: top.map(x => { const parts = []; if (x.s.podios) parts.push([x.s.ouro && x.s.ouro + ' ouro', x.s.prata && x.s.prata + ' prata', x.s.bronze && x.s.bronze + ' bronze'].filter(Boolean).join(', ')); if (x.s.finalA) parts.push(x.s.finalA + ' final(is) A'); if (x.rn) parts.push(x.rn + ' RN'); const br = bestResult(db, x.ind); return br.replace(/ .*/, '').match(/^\{/) ? br.match(/^\{\w+\}/)[0] + ' ' + x.a.name + (x.a.club ? ' (' + x.a.club + ')' : '') + ' — ' + parts.join(' · ') + ' · melhor: ' + br.replace(/^\{\w+\} /, '') : x.a.name + (x.a.club ? ' (' + x.a.club + ')' : '') + ' — ' + parts.join(' · ') + ' · melhor: ' + br; }) }); }
+  const clubs = Object.entries(rows.reduce((o, x) => { if (x.a.club) o[x.a.club] = (o[x.a.club] || 0) + 1; return o; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 12);
+  const medT = rows.filter(x => x.s.podios).sort((a, b) => b.s.ouro - a.s.ouro || b.s.podios - a.s.podios).slice(0, 10);
+  blocks.push({ t: 'imgs', items: [medT.length ? img({ type: 'bar', data: { labels: medT.map(x => x.a.name), datasets: [{ label: 'Ouro', data: medT.map(x => x.s.ouro), backgroundColor: CC.ouro }, { label: 'Prata', data: medT.map(x => x.s.prata), backgroundColor: CC.prata }, { label: 'Bronze', data: medT.map(x => x.s.bronze), backgroundColor: CC.bronze }] }, options: { indexAxis: 'y', scales: { x: { stacked: true }, y: { stacked: true, ticks: { font: { size: 8 } } } } } }, 85, 62, 'Mais medalhas') : { data: null },
+    clubs.length ? img({ type: 'bar', data: { labels: clubs.map(c => c[0]), datasets: [{ label: 'Nadadores', data: clubs.map(c => c[1]), backgroundColor: CC.blue }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } } } }, 85, 62, 'Nadadores por clube') :
+      img({ type: 'doughnut', data: { labels: C.ESCALOES.slice().reverse(), datasets: [{ data: C.ESCALOES.slice().reverse().map(e => rows.filter(x => x.esc === e).length), backgroundColor: [CC.navy, CC.blue, CC.gold, CC.teal] }] }, options: { plugins: { legend: { position: 'right' } } } }, 85, 62, 'Nadadores por escalão')] });
+  if (estreias.length) { blocks.push({ t: 'h2', text: 'Estreias em competição internacional (' + estreias.length + ')' }); blocks.push({ t: 'p', text: estreias.map(x => x.a.name).sort().join(', '), small: true }); }
+  blocks.push({ t: 'p', text: LEGEND, small: true, muted: true });
+  for (const e of C.ESCALOES.slice().reverse()) {
+    const list = rows.filter(x => x.esc === e).sort((x, y) => y.s.ouro - x.s.ouro || y.s.podios - x.s.podios || y.s.finalA - x.s.finalA || y.rn - x.rn || (y.s.pctMedio || 0) - (x.s.pctMedio || 0));
+    if (!list.length) continue;
+    blocks.push({ t: 'h', text: e + ' (' + list.length + ')' });
+    blocks.push({ t: 'table', head: ['Nadador', 'Clube', 'Comp.', 'Provas', '% RP', '% RP méd.'].concat(MED_HEAD, ['Fin. A', 'RN', 'Melhor resultado internacional']),
+      rows: list.map(x => [x.a.name, x.a.club || '', x.comps, x.s.nados, P(x.s.pctRP), P(x.s.pctMedio)].concat(medTxt(x.s), [x.s.finalA || '', x.rn || '', bestResult(db, x.ind)])), widths: [17, 6, 4, 5, 5, 6, 3, 3, 3, 4, 3, 22], align: [null, null, 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c', null], small: true });
+  }
+  return { title: 'Nadadores ' + periodLabel(mode, period), file: 'Nadadores_' + safe(periodLabel(mode, period)), blocks };
+}
+/* Recordes */
+function recordsReport(db, mode, period, f) {
+  f = f || {};
+  const sm = db.meta.seasonStartMonth;
+  const rs = C.recordsSummary(db, mode, period);
+  const pass = r => (!f.quem || r.quem === f.quem) && (!f.tipo || r.type === f.tipo) && (!f.q || C.norm(r.classe + ' ' + r.holder + ' ' + r.place + ' ' + r.club).includes(C.norm(f.q)));
+  const recs = rs.recs.filter(pass);
+  const pp = C.prevPeriod(db, mode, period); const prev = pp ? C.recordsSummary(db, mode, pp).recs.filter(pass) : null;
+  const cnt = (list, fn) => list ? list.filter(fn).length : null;
+  const fl = filtLabel(f);
+  const blocks = [{ t: 'title', text: 'Recordes Nacionais' }, { t: 'sub', text: periodLabel(mode, period) + (fl ? ' · ' + fl : '') + ' · Natação Pura' + (pp ? ' · comparação com ' + pp : '') }];
+  const k = (label, fn, sub) => ({ label, value: fn ? cnt(recs, fn) : recs.length, sub, delta: prev ? dlt(fn ? cnt(recs, fn) : recs.length, fn ? cnt(prev, fn) : prev.length) : '' });
+  const indiv = recs.filter(r => !(C.parseEvent(r.event) || {}).relay);
+  blocks.push({ t: 'kpis', items: [k('Recordes Nacionais'), k('Absolutos', r => /abs/i.test(r.type)), k('Em Seleção Nacional', r => r.quem === 'Seleção Nacional'), k('Em clube', r => r.quem === 'Clube'), { label: 'Recordistas (individuais)', value: new Set(indiv.flatMap(r => r.athleteIds)).size }, k('Piscina 50 m', r => r.pool === 'P50'), k('Piscina 25 m', r => r.pool === 'P25'), k('Estafetas', r => (C.parseEvent(r.event) || {}).relay)] });
+  const abs = recs.filter(r => /abs/i.test(r.type)).slice().reverse();
+  if (abs.length) { blocks.push({ t: 'h', text: 'Recordes absolutos (' + abs.length + ')' }); blocks.push({ t: 'list', items: abs.slice(0, 12).map(r => '{rn} ' + r.event + ' ' + C.sexLabel(r.sex).toLowerCase() + ' (' + r.pool + ') — ' + r.holder + ' · ' + T(r.time) + ' · ' + D(r.date) + ', ' + r.place + (r.quem === 'Seleção Nacional' ? ' · Seleção' : '')).concat(abs.length > 12 ? ['… e mais ' + (abs.length - 12) + '.'] : []) }); }
+  const holders = {}; indiv.forEach(r => r.athleteIds.forEach(id => { const h = holders[id] = holders[id] || { a: 0, c: 0, s: 0 }; if (/abs/i.test(r.type)) h.a++; else h.c++; if (r.quem === 'Seleção Nacional') h.s++; }));
+  const top = Object.entries(holders).map(([id, h]) => ({ a: C.athById(db, id), h })).filter(x => x.a).sort((x, y) => (y.h.a + y.h.c) - (x.h.a + x.h.c) || y.h.a - x.h.a).slice(0, 12);
+  blocks.push({ t: 'imgs', items: [img({ type: 'bar', data: { labels: rs.evolution.map(e => e.period), datasets: [{ label: 'Seleção Nacional', data: rs.evolution.map(e => e.selecao), backgroundColor: CC.navy }, { label: 'Clube', data: rs.evolution.map(e => e.clube), backgroundColor: CC.lblue }, { label: 'Sel. Territorial', data: rs.evolution.map(e => e.territorial), backgroundColor: CC.gold }] }, options: { scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } }, 80, 60, 'Evolução e contexto'),
+    top.length ? img({ type: 'bar', data: { labels: top.map(x => x.a.name), datasets: [{ label: 'Absolutos', data: top.map(x => x.h.a), backgroundColor: CC.gold }, { label: 'Categoria', data: top.map(x => x.h.c), backgroundColor: CC.blue }] }, options: { indexAxis: 'y', scales: { x: { stacked: true }, y: { stacked: true, ticks: { font: { size: 8 } } } } } }, 88, 62, 'Recordistas') : { data: null }] });
+  if (top.length) { blocks.push({ t: 'h2', text: 'Recordistas' }); blocks.push({ t: 'table', head: ['Nadador', 'Clube', 'Absolutos', 'Categoria', 'Em Seleção', 'Total'], rows: top.map(x => [x.a.name, x.a.club || '', x.h.a || '', x.h.c || '', x.h.s || '', x.h.a + x.h.c]), widths: [18, 7, 5, 5, 5, 4], align: [null, null, 'c', 'c', 'c', 'c'] }); }
+  blocks.push({ t: 'h2', text: 'Evolução por ' + (mode === 'ano' ? 'ano civil' : 'época') });
+  blocks.push({ t: 'table', head: [mode === 'ano' ? 'Ano' : 'Época', 'Total', 'Absolutos', 'Categoria', 'Seleção Nacional', 'Clube', 'Sel. Territorial', 'P50', 'P25'], rows: rs.evolution.map(e => [e.period, e.total, e.absoluto, e.categoria, e.selecao, e.clube, e.territorial, e.p50, e.p25]), widths: [8, 5, 6, 6, 7, 5, 7, 4, 4], align: [null].concat(Array(8).fill('c')) });
+  const catOrder = ['Absoluto', 'Sénior', 'Júnior', 'Juvenil', 'Infantil', 'Categoria', ''];
+  const byCat = {}; recs.forEach(r => { const c = /abs/i.test(r.type) || r.category === 'Absoluto' ? 'Absoluto' : r.category || ''; (byCat[c] = byCat[c] || []).push(r); });
+  for (const c of catOrder.filter(c => byCat[c])) {
+    const list = byCat[c].slice().sort((a, b) => (a.sex || '').localeCompare(b.sex || '') || (a.pool || '').localeCompare(b.pool || '') || C.eventSort(a.event, b.event) || (a.date || '').localeCompare(b.date || ''));
+    blocks.push({ t: 'h', text: (c || 'Sem categoria') + (c === 'Absoluto' ? 's' : '') + ' (' + list.length + ')' });
+    blocks.push({ t: 'table', head: ['', 'Data', 'Prova / Classe', 'Titular', 'Tempo', 'Clube', 'Local', 'Pisc.'], rows: list.map(r => [r.quem === 'Seleção Nacional' ? '{rn}' : '', D(r.date), r.classe, r.holder, T(r.time), r.club, r.place, r.pool]), widths: [3, 7, 12, 27, 6, 6, 9, 4], align: ['c', 'c', null, null, 'r', null, null, 'c'], small: true });
+  }
+  blocks.push({ t: 'p', text: 'Bandeira: recorde obtido ao serviço da Seleção Nacional.', small: true, muted: true });
+  return { title: 'Recordes ' + periodLabel(mode, period), file: 'Recordes_' + safe(periodLabel(mode, period)), blocks };
 }
 function safe(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60); }
 
@@ -2858,7 +2953,7 @@ async function fullWorkbook(db, mode, period, legacyOnly) {
   const buf = await wb.xlsx.writeBuffer();
   return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
-root.Reports = { nadadoresReport, cvShortReport, synthesisPeriod, LEGEND, convocatoriaReport, convTitle, convDaysList, ptDateRange, estagiosReport, staffReport, placeCell, competitionReport, periodReport, cvReport, recordsReport, blocksToXlsx, fullWorkbook, periodLabel, safe, athName, SUM_HEAD, sumRow, RES_HEAD, resRow };
+root.Reports = { competicoesReport, recordsReport, nadadoresReport, cvShortReport, synthesisPeriod, LEGEND, convocatoriaReport, convTitle, convDaysList, ptDateRange, estagiosReport, staffReport, placeCell, competitionReport, periodReport, cvReport, recordsReport, blocksToXlsx, fullWorkbook, periodLabel, safe, athName, SUM_HEAD, sumRow, RES_HEAD, resRow };
 })(this);
 </script>
 <script>/* Aplicação — Resultados Internacionais FPN */
@@ -2979,6 +3074,8 @@ function possibleDuplicates() {
 function viewCompeticoes(main) {
   const top = h('div', '<h1>Competições</h1>', 'vhead'); top.appendChild(periodControls(route)); main.appendChild(top);
   dashCompeticoes(main);
+  const ebar = h('div', exportBar('cmp', 'Relatório de competições'), 'toolbar'); main.appendChild(ebar);
+  bindExport('cmp', () => R.competicoesReport(db, ui.mode, ui.period, { tier: $('#ft') ? $('#ft').value : '', q: $('#q') ? $('#q').value.trim() : '' }));
   const bar = h('div', '<input id="q" placeholder="Procurar competição, cidade ou país…" value=""><select id="ft"><option value="">Todas as competições</option><option value="p">Jogos, Mundiais e Europeus</option><option value="1">Jogos Olímpicos</option><option value="2">Campeonatos do Mundo</option><option value="3">Campeonatos da Europa</option><option value="4">Outros Jogos</option><option value="o">Outras competições</option></select><button id="newc" class="pri">Nova competição</button><button id="merge">Fundir selecionadas</button>', 'toolbar');
   main.appendChild(bar);
   const list = h('div', ''); main.appendChild(list);
@@ -3228,7 +3325,7 @@ function viewNadadores(main) {
     $$('[data-sel]', list).forEach(cb => cb.onchange = () => { cb.checked ? ui.athSel.add(cb.dataset.sel) : ui.athSel.delete(cb.dataset.sel); });
   };
   $('#q').oninput = draw; $('#fs').onchange = draw; $('#fe').onchange = draw; $('#fc').onchange = draw; draw();
-  list.insertAdjacentHTML('beforebegin', '<div class="toolbar">' + exportBar('nad', 'Exportar quadro de nadadores') + '</div>'); bindExport('nad', () => R.nadadoresReport(db, ui.mode, ui.period));
+  list.insertAdjacentHTML('beforebegin', '<div class="toolbar">' + exportBar('nad', 'Relatório de nadadores') + '</div>'); bindExport('nad', () => R.nadadoresReport(db, ui.mode, ui.period, { sexo: $('#fs').value, escalao: $('#fe').value, clube: $('#fc').value, q: $('#q').value.trim() }));
   $('#newa').onclick = () => athleteForm(null);
   $('#mergea').onclick = () => {
     const ids = [...ui.athSel].filter(id => C.athById(db, id));
@@ -3321,9 +3418,9 @@ function viewRecordes(main) {
   const rs = C.recordsSummary(db, ui.mode, ui.period);
   const kv = o => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => '<div class="kvr"><span>' + esc(k) + '</span><b>' + v + '</b></div>').join('');
   main.appendChild(h('div', '<div class="card"><h3>Total</h3><div class="big">' + rs.recs.length + '</div></div><div class="card"><h3>Por tipo</h3>' + kv(rs.byType) + '</div><div class="card"><h3>Por contexto</h3>' + kv(rs.byQuem) + '</div><div class="card"><h3>Por piscina</h3>' + kv(rs.byPool) + '</div><div class="card"><h3>Por categoria</h3>' + kv(rs.byCat) + '</div>', 'cards'));
-  const ev = h('section', '<div class="shead"><h2>Evolução por ' + (ui.mode === 'ano' ? 'ano civil' : 'época') + '</h2>' + exportBar('rec') + '</div>' + table([ui.mode === 'ano' ? 'Ano' : 'Época', 'Total', 'Absolutos', 'Categoria', 'Seleção Nacional', 'Clube', 'Sel. Territorial', 'P50', 'P25'],
+  const ev = h('section', '<div class="shead"><h2>Evolução por ' + (ui.mode === 'ano' ? 'ano civil' : 'época') + '</h2>' + exportBar('rec', 'Relatório de recordes') + '</div>' + table([ui.mode === 'ano' ? 'Ano' : 'Época', 'Total', 'Absolutos', 'Categoria', 'Seleção Nacional', 'Clube', 'Sel. Territorial', 'P50', 'P25'],
     rs.evolution.map(e => tr([e.period, '<b>' + e.total + '</b>', e.absoluto, e.categoria, e.selecao, e.clube, e.territorial, e.p50, e.p25], '', [1, 2, 3, 4, 5, 6, 7, 8])), { num: [1, 2, 3, 4, 5, 6, 7, 8] }));
-  main.appendChild(ev); bindExport('rec', () => R.recordsReport(db, ui.mode, ui.period));
+  main.appendChild(ev); bindExport('rec', () => R.recordsReport(db, ui.mode, ui.period, { quem: $('#rquem') ? $('#rquem').value : '', tipo: $('#rtype') ? $('#rtype').value : '', q: $('#rq') ? $('#rq').value.trim() : '' }));
   main.appendChild(h('div', '<label class="filebtn">Importar tabela de recordes em vigor (Excel)<input type="file" id="cr_imp" accept=".xlsx"></label><button id="rn_rev">Possíveis RN por confirmar (' + C.rnPending(db).length + ')</button><span class="muted">' + ((db.currentRecords || []).length ? (db.currentRecords.length + ' recordes em vigor carregados') : 'Sem tabela em vigor: a deteção de possíveis RN usa o histórico de recordes') + '</span>', 'toolbar'));
   $('#rn_rev').onclick = () => rnReview();
   $('#cr_imp').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const list = await importCurrentRecords(f); if (!list.length) throw new Error('Não encontrei colunas de prova e tempo.'); db.currentRecords = list; save('current-records', f.name); toast(list.length + ' recordes em vigor carregados.'); route(); } catch (err) { toast(err.message, true); } };
