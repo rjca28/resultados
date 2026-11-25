@@ -63,6 +63,22 @@ textarea{font:inherit;border:1px solid #C9D3DF;border-radius:6px;padding:6px 8px
 input.xs2{width:90px}.okin{background:#EAF3DE}.swt input.s_name{width:230px}.swt input.s_ev{width:170px}.stt input.t_role,.stt input.t_name{width:220px}
 .qsheet{border-left:4px solid var(--blue)}.qst tr.done td{background:#EAF3DE}.qst select{max-width:140px}.qst input.q_obs{width:140px}
 nav#nav a{padding:8px 9px}
+
+.dup{color:#1D9E75;font-weight:bold}.ddn{color:#A32D2D;font-weight:bold}.dz{color:var(--mut)}p.small{font-size:12px;margin:4px 0 0}
+.alertbox{border-left:4px solid var(--gold)}ul.alerts{list-style:none;margin:0;padding:0}ul.alerts li{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px dotted var(--line)}ul.alerts li>span:nth-child(2){flex:1}
+ul.alerts .dot{width:10px;height:10px;border-radius:50%;flex:none}.lv-alta .dot{background:#E24B4A}.lv-media .dot{background:#EF9F27}.lv-baixa .dot{background:#85B7EB}
+.goals{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}.goal{border:1px solid var(--line);border-radius:8px;padding:8px 10px}.gl{font-size:12px;color:var(--mut)}.gv{font-size:20px;font-weight:bold;color:var(--navy)}.gv small{font-size:12px;color:var(--mut);font-weight:normal}
+.gbar{height:6px;background:#EDF1F6;border-radius:3px;overflow:hidden;margin:4px 0}.gbar span{display:block;height:100%}.g-green .gbar span{background:#1D9E75}.g-amber .gbar span{background:#EF9F27}.g-red .gbar span{background:#E24B4A}.g-gray .gbar span{background:#B4B2A9}.gp{font-size:12px;color:var(--mut)}
+th.sortable{cursor:pointer;user-select:none}th.sortable:hover{background:var(--blue)}th[data-dir=asc]::after{content:' ▲';font-size:10px}th[data-dir=desc]::after{content:' ▼';font-size:10px}
+td.pos,.pos{color:#1D9E75;font-weight:bold}td.neg,.neg{color:#D85A30;font-weight:bold}td.mid{color:var(--blue)}
+details.manual,details.reclist{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin:14px 0;padding:0 14px}details.manual>summary,details.reclist>summary{cursor:pointer;padding:12px 0;font-weight:bold;color:var(--navy)}details.manual section,details.reclist section{border:0;padding:0 0 10px;margin:0}
+.qgroup{border:1px solid var(--line);border-radius:8px;margin:10px 0;overflow:hidden}.qgh{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#EEF3F9;padding:6px 10px}.qgh .ph{color:var(--blue);font-weight:bold}.qgn{margin-left:auto;font-size:12.5px;color:var(--mut);display:flex;gap:6px;align-items:center}
+.qst td{vertical-align:middle}.qst td.nm{width:34%}.qst input.q_time{width:96px;font-variant-numeric:tabular-nums}.qst input.q_obs{width:100%;min-width:120px}.qst .rpc{font-size:12.5px;white-space:nowrap}.qst tr.done td{background:#F2F8EC}.qhelp{font-size:12.5px;margin:0 0 6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.chip{font-size:12.5px;padding:3px 8px;border-radius:12px}.chip:disabled{opacity:.4}
+/* modo piscina (tablet) */
+body.pool{font-size:17px}body.pool .qst input,body.pool .qgh input{font-size:18px;padding:10px 10px;min-height:46px}body.pool .qst input.q_time{width:130px}body.pool .qst input.xs{width:70px}body.pool .qst td{padding:6px 6px}
+body.pool button{min-height:42px;padding:8px 14px}body.pool .dash,body.pool .chgrid{display:none}body.pool header{position:static}
+@media (max-width:900px){.qst,.qst tbody,.qst tr,.qst td{display:block;width:100%!important}.qst tr{display:grid!important;grid-template-columns:1fr 1fr;gap:6px;padding:8px;border-bottom:1px solid var(--line)}.qst td.nm{grid-column:span 2}.qst td{border:0!important}.qst input.q_time,.qst input.q_obs{width:100%}.qgn{margin-left:0}}
 </style>
 </head>
 <body>
@@ -80,7 +96,7 @@ nav#nav a{padding:8px 9px}
     <a href="#importar" data-v="importar">Importar</a>
     <a href="#backup" data-v="backup">Backup</a>
   </nav>
-  <div class="hstat"><span id="bk" class="bk" onclick="location.hash='backup'">—</span><span id="savestate"></span></div>
+  <div class="hstat"><span id="bkauto" class="bk" style="display:none"></span><span id="bk" class="bk" onclick="location.hash='backup'">—</span><span id="savestate"></span></div>
 </header>
 <main id="main"></main>
 <div id="toast" class="toast"></div>
@@ -886,7 +902,7 @@ function matchMembers(db, team) {
 /* ---------- base de dados ---------- */
 function emptyDB() {
   return { meta: { version: 1, created: new Date().toISOString(), seasonStartMonth: 9, lastBackup: null, nation: 'POR' },
-    athletes: [], competitions: [], comitivas: [], results: [], records: [], refMarks: [], people: [], convocatorias: [], log: [] };
+    athletes: [], competitions: [], comitivas: [], results: [], records: [], refMarks: [], people: [], convocatorias: [], currentRecords: [], log: [] };
 }
 function migrate(db) {
   const e = emptyDB();
@@ -1620,6 +1636,143 @@ function staffSummary(db, mode, period) {
   return rows;
 }
 
+/* ---------- Otimizações de introdução ---------- */
+/* preenche RP em falta a partir de marcas de referência e resultados anteriores */
+function fillMissingRP(db) {
+  let n = 0;
+  for (const r of db.results) {
+    if (!r.athleteId || r.rp || !r.time) continue;
+    const c = compById(db, r.compId);
+    const rp = lookupRP(db, r.athleteId, r.event, c ? c.pool : '', c && c.start ? c.start : r.date, r.id);
+    if (rp) { r.rp = rp; n++; }
+  }
+  return n;
+}
+/* formato de fases da competição e fase seguinte sugerida a partir do lugar */
+const FORMATOS = [['AB', 'Eliminatórias + Finais A e B'], ['A', 'Eliminatórias + Final A'], ['SF', 'Eliminatórias + Meias-finais (50–200) + Final'], ['TF', 'Finais diretas (sem eliminatórias)']];
+function nextPhase(comp, event, phase, place) {
+  if (!place) return null;
+  const f = (comp && comp.formato) || 'AB';
+  const d = parseInt(String(event).split(' ')[0].split('x').pop(), 10);
+  if (phase === 'Eliminatória') {
+    if (f === 'SF' && d <= 200 && !/x/.test(event)) return place <= 16 ? 'Meia-Final' : null;
+    if (place <= 8) return 'Final A';
+    if (f === 'AB' && place <= 16) return 'Final B';
+    return null;
+  }
+  if (phase === 'Meia-Final') return place <= 8 ? 'Final A' : null;
+  return null;
+}
+/* recordes em vigor: tabela importada; na falta, melhor marca do histórico de recordes */
+function recKeyOf(event, sex, pool, category, age) { return [event, sex || '', pool || 'P50', category || '', age || ''].join('|'); }
+function currentRecordTable(db) {
+  const map = new Map();
+  const add = (r, src) => {
+    if (!r.time || !r.event) return;
+    const cat = /abs/i.test(r.type || '') || r.category === 'Absoluto' ? 'Absoluto' : r.category || '';
+    const k = recKeyOf(r.event, r.sex, r.pool, cat, cat === 'Absoluto' ? '' : r.age);
+    const cur = map.get(k);
+    if (!cur || r.time < cur.time) map.set(k, { event: r.event, sex: r.sex, pool: r.pool || 'P50', category: cat, age: cat === 'Absoluto' ? '' : r.age, time: r.time, holder: r.holder, date: r.date, src });
+  };
+  for (const r of db.records) add(r, 'histórico');
+  for (const r of db.currentRecords || []) add(r, 'tabela em vigor');
+  return map;
+}
+function ageAt(athlete, iso) { if (!athlete || !athlete.birth || !iso) return null; return +iso.slice(0, 4) - +athlete.birth.slice(0, 4); }
+function rnCandidates(db, res, table) {
+  if (!res || !res.time || !res.event) return [];
+  table = table || currentRecordTable(db);
+  const c = compById(db, res.compId); const pool = c ? c.pool : 'P50';
+  const a = res.athleteId ? athById(db, res.athleteId) : null;
+  const sex = res.sex || (a && a.sex) || '';
+  const age = ageAt(a, res.date);
+  const out = [];
+  for (const rec of table.values()) {
+    if (rec.event !== res.event || (rec.pool || 'P50') !== pool || (rec.sex && sex && rec.sex !== sex)) continue;
+    if (rec.date && res.date && rec.date > res.date) continue;
+    if (rec.category !== 'Absoluto') {
+      if (rec.age && age != null) { if (String(rec.age) !== String(age)) continue; }
+      else if (rec.category !== res.escalao) continue;
+    }
+    if (res.time < rec.time) out.push(rec);
+  }
+  return out;
+}
+function rnPending(db) {
+  const table = currentRecordTable(db);
+  const linked = new Set(db.records.map(r => r.resultId).filter(Boolean));
+  const dismissed = new Set(db.meta.rnDismissed || []);
+  const out = [];
+  for (const r of db.results) {
+    if (!r.time || linked.has(r.id) || dismissed.has(r.id) || r.rn || r.source === 'excel') continue;
+    const c = rnCandidates(db, r, table); if (c.length) out.push({ result: r, recs: c });
+  }
+  return out;
+}
+/* duplicar edição anterior */
+function bumpEdition(name) {
+  return name.replace(/\b(\d{1,3})(st|nd|rd|th|º|ª|\.?ª|\.?º)?\b/, (m, n, suf) => { const k = +n + 1; if (/st|nd|rd|th/.test(suf || '')) { const s = k % 10 === 1 && k % 100 !== 11 ? 'st' : k % 10 === 2 && k % 100 !== 12 ? 'nd' : k % 10 === 3 && k % 100 !== 13 ? 'rd' : 'th'; return k + s; } return k + (suf || ''); })
+    .replace(/\b(20\d\d)\b/, (m, y) => String(+y + 1));
+}
+function duplicateEdition(db, comp, start, end, opts) {
+  opts = opts || {};
+  const nc = newCompetition(db, { name: opts.name || bumpEdition(comp.name), ambito: comp.ambito, country: comp.country, city: comp.city, pool: comp.pool, formato: comp.formato, principal: comp.principal, start, end, notes: '', prevId: comp.id });
+  const shift = d => { if (!d || !comp.start) return d; const ms = Date.parse(d) - Date.parse(comp.start) + Date.parse(start); return new Date(ms).toISOString().slice(0, 10); };
+  for (const v of convOfComp(db, comp.id)) {
+    const nv = JSON.parse(JSON.stringify(v)); nv.id = uid('v'); nv.compId = nc.id; nv.comitivaIds = []; nv.start = start; nv.end = end; nv.name = nc.name; nv.source = 'duplicado';
+    nv.flights = (nv.flights || []).map(r => r.map(x => x)); 
+    for (const g of nv.groups) { if (!opts.keepSwimmers) g.swimmers = []; else g.swimmers.forEach(sw => { sw.events = (sw.events || []).map(e => ({ date: shift(e.date), event: e.event })); }); }
+    applyConvocatoria(db, nv);
+  }
+  return nc;
+}
+/* períodos: anterior e comparação */
+function prevPeriod(db, mode, p) { if (!p || p === '*') return null; const ps = periodsOf(db, mode); const i = ps.indexOf(p); return i > 0 ? ps[i - 1] : null; }
+function currentPeriod(db, mode) {
+  const today = new Date().toISOString().slice(0, 10); const p = periodOf(today, mode, db.meta.seasonStartMonth);
+  const ps = periodsOf(db, mode); if (ps.includes(p)) return p; return ps.filter(x => x <= p).pop() || ps[ps.length - 1] || '*';
+}
+function prevEdition(db, comp) {
+  if (comp.prevId && compById(db, comp.prevId)) return compById(db, comp.prevId);
+  const k = compKey(comp.name);
+  return db.competitions.filter(c => c.id !== comp.id && c.start && comp.start && c.start < comp.start && (compKey(c.name) === k || nameSim(c.name, comp.name) >= 0.85)).sort((a, b) => b.start.localeCompare(a.start))[0] || null;
+}
+/* metas do PAR por período */
+const GOAL_KEYS = [['competicoes', 'Competições'], ['atletas', 'Nadadores'], ['podios', 'Medalhas'], ['ouro', 'Medalhas de ouro'], ['finalA', 'Finais A'], ['pctRP', '% RP (provas por nadador)'], ['pctMedio', '% RP médio'], ['rnPeriodo', 'Recordes Nacionais'], ['rnSel', 'RN em Seleção']];
+function goalStatus(db, mode, period) {
+  const g = ((db.meta.goals || {})[mode + ':' + period]) || null; if (!g) return null;
+  const s = dashboard(db, mode, period).s;
+  return GOAL_KEYS.filter(([k]) => g[k] != null && g[k] !== '').map(([k, label]) => {
+    const target = +g[k]; const val = s[k] == null ? 0 : s[k]; const pctKey = /pct/.test(k);
+    const ratio = target ? (pctKey ? val / (target / 100) : val / target) : null;
+    return { key: k, label, target, value: val, ratio, light: ratio == null ? 'gray' : ratio >= 1 ? 'green' : ratio >= 0.75 ? 'amber' : 'red', pct: pctKey };
+  });
+}
+/* alertas operacionais */
+function alerts(db) {
+  const today = new Date().toISOString().slice(0, 10); const out = [];
+  for (const c of db.competitions) {
+    const end = c.end || c.start; if (!end || end >= today) continue;
+    const n = compResults(db, c.id).length;
+    if (!n && daysBetween(end, today) <= 120) out.push({ lvl: 'alta', type: 'comp', text: 'Competição terminou há ' + daysBetween(end, today) + ' dias e não tem resultados', link: 'introduzir/' + c.id, label: c.name });
+  }
+  for (const v of db.convocatorias) {
+    if (!v.staff.length) out.push({ lvl: 'media', type: 'conv', text: 'Convocatória sem staff', link: 'conv/' + v.id, label: v.name });
+    const noClub = convSwimmers(v).filter(s => !s.club).length;
+    if (noClub) out.push({ lvl: 'baixa', type: 'conv', text: noClub + ' nadador(es) sem clube na convocatória', link: 'conv/' + v.id, label: v.name });
+    if (v.start && v.start > today && daysBetween(today, v.start) <= 21 && v.tipo === 'Competição' && !convSwimmers(v).some(s => (s.events || []).length)) out.push({ lvl: 'media', type: 'conv', text: 'Competição daqui a ' + daysBetween(today, v.start) + ' dias sem provas previstas na convocatória', link: 'conv/' + v.id, label: v.name });
+  }
+  const noRP = db.results.filter(r => r.athleteId && r.time && !r.rp).length;
+  if (noRP) out.push({ lvl: 'media', type: 'rp', text: noRP + ' resultado(s) sem RP de entrada (não contam para o % RP)', action: 'fillrp', label: 'Preencher RP' });
+  const pend = rnPending(db);
+  if (pend.length) out.push({ lvl: 'alta', type: 'rn', text: pend.length + ' possível(eis) Recorde(s) Nacional(ais) por confirmar', action: 'rn', label: 'Rever' });
+  for (const k of db.comitivas) if (k.tipo === 'Estágio' && k.end && k.end < today && k.despesa == null && daysBetween(k.end, today) <= 120) out.push({ lvl: 'baixa', type: 'est', text: 'Estágio sem despesa registada', link: 'estagio/' + k.id, label: k.name });
+  const lb = db.meta.lastBackup; const days = lb ? (Date.now() - Date.parse(lb)) / 86400000 : 999;
+  if (days > 7) out.push({ lvl: 'alta', type: 'bk', text: lb ? 'Último backup há ' + Math.floor(days) + ' dias' : 'Ainda não foi feito nenhum backup', link: 'backup', label: 'Backup' });
+  const order = { alta: 0, media: 1, baixa: 2 };
+  return out.sort((a, b) => order[a.lvl] - order[b.lvl]);
+}
+
 /* ---------- LENEX ---------- */
 const LX_STROKE = { FREE: 'Livres', BACK: 'Costas', BREAST: 'Bruços', FLY: 'Mariposa', MEDLEY: 'Estilos', IMRELAY: 'Estilos' };
 const LX_ROUND = { PRE: 'Eliminatória', SEM: 'Meia-Final', FIN: 'Final A', TIM: 'Final Direta', FHT: 'Série Rápida', SOP: 'Swim-Off', SOS: 'Swim-Off', SOQ: 'Swim-Off', QUA: 'Eliminatória' };
@@ -1731,7 +1884,7 @@ const api = { STROKES, EVENTS, EVENTS_IND, EVENTS_REL, OLYMPIC, PHASES, MEDAL_PH
   findAthlete, ensureAthlete, splitRelayMembers, matchMembers, isTeamName, emptyDB, migrate, logChange, compById, athById, guessPool,
   findCompetition, newCompetition, compPool, lookupRP, sheetRows, importLegacyRows, linkRecord, linkComitiva, enrich, summarize,
   compResults, compSummary, periodsOf, inPeriod, athleteResults, athleteCV, recordsSummary, dashboard, parseLenex, parsePdfLines,
-  resultKey, recKey, nameSim, num, teamKey, rnByCat, compTier, cleanData, mergeAthleteInto, mergeCompInto, parseConvocatoria, applyConvocatoria, convSwimmers, convDays, ensurePerson, convOfComp, activitiesOfAthlete, staffSummary, parsePtDates, bodyChildren, normRole, MESES, daysBetween };
+  resultKey, recKey, nameSim, num, teamKey, rnByCat, compTier, cleanData, mergeAthleteInto, mergeCompInto, parseConvocatoria, applyConvocatoria, convSwimmers, convDays, ensurePerson, convOfComp, activitiesOfAthlete, staffSummary, parsePtDates, bodyChildren, normRole, MESES, daysBetween, fillMissingRP, FORMATOS, nextPhase, currentRecordTable, rnCandidates, rnPending, bumpEdition, duplicateEdition, prevPeriod, currentPeriod, prevEdition, GOAL_KEYS, goalStatus, alerts, ageAt };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Core = api;
 })(this);
 </script>
@@ -1905,8 +2058,8 @@ function layoutLetterhead(lh) {
   return out;
 }
 /* ---------- ícones (medalhas e bandeira) ---------- */
-const ICON_RE = /\{(ouro|prata|bronze|rn)\}/g;
-const ICON_MM = { ouro: [4.2, 4.2], prata: [4.2, 4.2], bronze: [4.2, 4.2], rn: [5.4, 3.6] };
+const ICON_RE = /\{(ouro|prata|bronze|rn|sg|sa|sr)\}/g;
+const ICON_MM = { ouro: [4.2, 4.2], prata: [4.2, 4.2], bronze: [4.2, 4.2], rn: [5.4, 3.6], sg: [3.4, 3.4], sa: [3.4, 3.4], sr: [3.4, 3.4] };
 let ICONS = null;
 function makeIcons() {
   if (ICONS || typeof document === 'undefined') return ICONS;
@@ -1927,11 +2080,34 @@ function makeIcons() {
     g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 2; g.strokeRect(1, 1, 148, 98);
     return c.toDataURL('image/png');
   };
-  ICONS = { ouro: medal('#E9C031', '#B8901A', '#5C4300'), prata: medal('#C4CAD0', '#8D959E', '#33393F'), bronze: medal('#CD8A4E', '#93582A', '#4A2508'), rn: flag() };
+  const dot = col => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = col; g.beginPath(); g.arc(32, 32, 28, 0, Math.PI * 2); g.fill(); return c.toDataURL('image/png'); };
+  ICONS = { ouro: medal('#E9C031', '#B8901A', '#5C4300'), prata: medal('#C4CAD0', '#8D959E', '#33393F'), bronze: medal('#CD8A4E', '#93582A', '#4A2508'), rn: flag(), sg: dot('#1D9E75'), sa: dot('#EF9F27'), sr: dot('#E24B4A') };
   return ICONS;
+}
+/* gráfico Chart.js -> PNG (para Word/PDF/Excel) */
+function chartPNG(cfg, wpx, hpx) {
+  if (typeof document === 'undefined' || !window.Chart) return null;
+  const holder = document.createElement('div'); holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:' + wpx + 'px;height:' + hpx + 'px';
+  const c = document.createElement('canvas'); c.width = wpx * 2; c.height = hpx * 2; c.style.width = wpx + 'px'; c.style.height = hpx + 'px'; holder.appendChild(c); document.body.appendChild(holder);
+  const conf = Object.assign({}, cfg, { data: cfg.data });
+  conf.options = Object.assign({}, cfg.options || {}, { animation: false, responsive: false, devicePixelRatio: 2 });
+  conf.options.plugins = Object.assign({ legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }, conf.options.plugins || {});
+  conf.plugins = [{ id: 'bg', beforeDraw: ch => { const g = ch.ctx; g.save(); g.fillStyle = '#fff'; g.fillRect(0, 0, ch.width, ch.height); g.restore(); } }];
+  let url = null;
+  try { const ch = new Chart(c, conf); url = ch.toBase64Image('image/png'); ch.destroy(); } catch (e) { console.warn(e); }
+  holder.remove();
+  return url;
 }
 function splitIcons(text) { const icons = []; const t = String(text == null ? '' : text).replace(ICON_RE, (m, k) => { icons.push(k); return ''; }).replace(/\s{2,}/g, ' ').trim(); return { icons, text: t }; }
 let DOCPR = 9000;
+let DOC_IMGS = [];
+function imgRun(dataUrl, wmm, hmm) {
+  const k = 'img' + DOC_IMGS.length; DOC_IMGS.push({ k, data: dataUrl.split(',')[1] });
+  const cx = Math.round(wmm * EMU_MM), cy = Math.round(hmm * EMU_MM); const id = ++DOCPR;
+  return '<w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0"><wp:extent cx="' + cx + '" cy="' + cy + '"/><wp:docPr id="' + id + '" name="grafico ' + id + '"/>' +
+    '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="' + id + '" name="' + k + '.png"/><pic:cNvPicPr/></pic:nvPicPr>' +
+    '<pic:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rIdFpnImg_' + k + '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + cx + '" cy="' + cy + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+}
 function iconRun(k) {
   const [w, h] = ICON_MM[k]; const cx = Math.round(w * EMU_MM), cy = Math.round(h * EMU_MM); const id = ++DOCPR;
   return '<w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0"><wp:extent cx="' + cx + '" cy="' + cy + '"/><wp:docPr id="' + id + '" name="icone ' + id + '"/>' +
@@ -1940,8 +2116,12 @@ function iconRun(k) {
     '<w:r><w:t xml:space="preserve"> </w:t></w:r>';
 }
 async function addIconParts(zip) {
-  const ic = makeIcons(); if (!ic) return;
+  const ic = Object.assign({}, makeIcons() || {});
   let rels = await zip.file('word/_rels/document.xml.rels').async('string');
+  for (const im of DOC_IMGS) {
+    zip.file('word/media/fpn_' + im.k + '.png', im.data, { base64: true });
+    if (rels.indexOf('rIdFpnImg_' + im.k + '"') < 0) rels = rels.replace('</Relationships>', '<Relationship Id="rIdFpnImg_' + im.k + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/fpn_' + im.k + '.png"/></Relationships>');
+  }
   for (const k of Object.keys(ic)) {
     zip.file('word/media/fpn_icon_' + k + '.png', ic[k].split(',')[1], { base64: true });
     if (rels.indexOf('rIdFpnIcon_' + k) < 0) rels = rels.replace('</Relationships>', '<Relationship Id="rIdFpnIcon_' + k + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/fpn_icon_' + k + '.png"/></Relationships>');
@@ -2000,6 +2180,21 @@ function blocksToXml(blocks, totalTw) {
     else if (b.t === 'kv') x += tableXml(['', ''], b.rows, [1, 2], totalTw, { sz: 18 }).replace(/<w:tr><w:trPr><w:tblHeader\/>[\s\S]*?<\/w:tr>/, '');
     else if (b.t === 'table') x += tableXml(b.head, b.rows, b.widths || b.head.map(() => 1), totalTw, Object.assign({ sz: b.small ? 15 : 17 }, b));
     else if (b.t === 'pagebreak') x += '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+    else if (b.t === 'list') x += b.items.map(it => '<w:p><w:pPr><w:spacing w:before="0" w:after="60"/><w:ind w:left="284" w:hanging="227"/></w:pPr>' + run('•  ', { sz: 20, color: GOLD }) + run(it, { sz: 20 }) + '</w:p>').join('');
+    else if (b.t === 'img' && b.data) x += '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="60" w:after="120"/></w:pPr>' + imgRun(b.data, b.w, b.h) + '</w:p>' + (b.caption ? para(b.caption, { sz: 16, color: '5F5E5A', align: 'center' }) : '');
+    else if (b.t === 'imgs') {
+      const its = b.items.filter(i => i.data); if (!its.length) continue;
+      const cw = Math.floor(totalTw / its.length);
+      x += '<w:tbl><w:tblPr><w:tblW w:w="' + totalTw + '" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders>' + ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(t => '<w:' + t + ' w:val="nil"/>').join('') + '</w:tblBorders></w:tblPr><w:tblGrid>' + its.map(() => '<w:gridCol w:w="' + cw + '"/>').join('') + '</w:tblGrid><w:tr>' +
+        its.map(i => '<w:tc><w:tcPr><w:tcW w:w="' + cw + '" w:type="dxa"/></w:tcPr>' + (i.title ? para(i.title, { b: true, sz: 17, color: BLUE, after: 40 }) : '') + '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>' + imgRun(i.data, i.w, i.h) + '</w:p></w:tc>').join('') + '</w:tr></w:tbl>' + para('', { after: 60 });
+    }
+    else if (b.t === 'kpis') {
+      const per = b.cols || 4; const cw = Math.floor(totalTw / per);
+      const rowsK = []; for (let i = 0; i < b.items.length; i += per) rowsK.push(b.items.slice(i, i + per));
+      x += '<w:tbl><w:tblPr><w:tblW w:w="' + totalTw + '" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders>' + ['top', 'bottom', 'insideH'].map(t => '<w:' + t + ' w:val="single" w:sz="12" w:space="0" w:color="FFFFFF"/>').join('') + ['left', 'right', 'insideV'].map(t => '<w:' + t + ' w:val="single" w:sz="12" w:space="0" w:color="FFFFFF"/>').join('') + '</w:tblBorders></w:tblPr><w:tblGrid>' + Array(per).fill('<w:gridCol w:w="' + cw + '"/>').join('') + '</w:tblGrid>' +
+        rowsK.map(r => '<w:tr><w:trPr><w:cantSplit/></w:trPr>' + r.concat(Array(per - r.length).fill(null)).map(k => '<w:tc><w:tcPr><w:tcW w:w="' + cw + '" w:type="dxa"/>' + (k ? '<w:shd w:val="clear" w:color="auto" w:fill="EEF3F9"/><w:tcBorders><w:left w:val="single" w:sz="24" w:space="0" w:color="' + BLUE + '"/></w:tcBorders>' : '') + '</w:tcPr>' +
+          (k ? para(k.label, { sz: 15, color: '5F5E5A', after: 0, before: 40 }) + para(String(k.value), { b: true, sz: 30, color: NAVY, after: 0 }) + para([k.sub, k.delta].filter(Boolean).join('  ·  ') || ' ', { sz: 14, color: /^▲/.test(k.delta || '') ? '1D9E75' : /^▼/.test(k.delta || '') ? 'A32D2D' : '5F5E5A', after: 40 }) : '<w:p/>') + '</w:tc>').join('') + '</w:tr>').join('') + '</w:tbl>' + para('', { after: 80 });
+    }
   }
   return x;
 }
@@ -2035,9 +2230,10 @@ async function buildDocx(blocks, lh, opts) {
   }
   const L = +attr(pgMar, 'w:left') || 1134, Rm = +attr(pgMar, 'w:right') || 1134;
   const total = W - L - Rm;
+  DOC_IMGS = [];
   doc = doc.slice(0, bs + 8) + blocksToXml(blocks, total) + sect + doc.slice(be);
   zip.file('word/document.xml', doc);
-  if (/rIdFpnIcon_/.test(doc)) await addIconParts(zip);
+  if (/rIdFpnIcon_|rIdFpnImg_/.test(doc)) await addIconParts(zip);
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 }, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
 }
 
@@ -2106,6 +2302,44 @@ function buildPdf(blocks, lh, opts) {
     else if (b.t === 'h2') { ensure(12); y += 1; text(b.text, 10, 'bold', [24, 95, 165], 1); }
     else if (b.t === 'p') text(b.text, b.small ? 8.5 : 10, b.i ? 'italic' : 'normal', b.muted ? [95, 94, 90] : [30, 30, 30], 1.5);
     else if (b.t === 'pagebreak') { pdf.addPage(); decor(); y = m.top; }
+    else if (b.t === 'list') {
+      const ic = makeIcons() || {};
+      for (const it of b.items) {
+        const sp = splitIcons(it); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9.5);
+        const iw = sp.icons.reduce((a, k) => a + ICON_MM[k][0] * 0.9 + 0.8, 0);
+        const lines = pdf.splitTextToSize(sp.text, W - m.left - m.right - 5 - iw);
+        ensure(lines.length * 4.1 + 1);
+        pdf.setTextColor(186, 117, 23); pdf.text('•', m.left + 1, y + 3.3);
+        let x = m.left + 4.5;
+        for (const k of sp.icons) { try { pdf.addImage(ic[k], 'PNG', x, y + 0.3, ICON_MM[k][0] * 0.9, ICON_MM[k][1] * 0.9); } catch (e) {} x += ICON_MM[k][0] * 0.9 + 0.8; }
+        pdf.setTextColor(30, 30, 30); pdf.text(lines, x, y + 3.3); y += lines.length * 4.1 + 1;
+      }
+      y += 1.5;
+    }
+    else if (b.t === 'img' && b.data) { ensure(b.h + 6); pdf.addImage(b.data, 'PNG', (W - b.w) / 2, y, b.w, b.h); y += b.h + 2; if (b.caption) text(b.caption, 8, 'normal', [95, 94, 90], 2); }
+    else if (b.t === 'imgs') {
+      const its = b.items.filter(i => i.data); if (!its.length) continue;
+      const cw = (W - m.left - m.right) / its.length; const hh = Math.max(...its.map(i => i.h * Math.min(1, (cw - 2) / i.w))) + (its.some(i => i.title) ? 5 : 0);
+      ensure(hh + 4);
+      its.forEach((i, k) => { const sc = Math.min(1, (cw - 2) / i.w); let yy = y; if (i.title) { pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(24, 95, 165); pdf.text(i.title, m.left + k * cw + 1, y + 3); yy += 5; } pdf.addImage(i.data, 'PNG', m.left + k * cw + (cw - i.w * sc) / 2, yy, i.w * sc, i.h * sc); });
+      y += hh + 4;
+    }
+    else if (b.t === 'kpis') {
+      const per = b.cols || 4; const gap = 2.5; const cw = (W - m.left - m.right - gap * (per - 1)) / per; const ch = 17.5;
+      for (let i = 0; i < b.items.length; i += per) {
+        ensure(ch + gap);
+        b.items.slice(i, i + per).forEach((k, j) => {
+          const x = m.left + j * (cw + gap);
+          pdf.setFillColor(238, 243, 249); pdf.rect(x, y, cw, ch, 'F'); pdf.setFillColor(24, 95, 165); pdf.rect(x, y, 1, ch, 'F');
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(95, 94, 90); pdf.text(pdf.splitTextToSize(String(k.label), cw - 4)[0], x + 3, y + 4.5);
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(15); pdf.setTextColor(4, 44, 83); pdf.text(String(k.value), x + 3, y + 11);
+          const sub = [k.sub, k.delta].filter(Boolean).join('  ·  ');
+          if (sub) { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor.apply(pdf, /^▲/.test(k.delta || '') && !k.sub ? [29, 158, 117] : /^▼/.test(k.delta || '') && !k.sub ? [163, 45, 45] : [95, 94, 90]); pdf.text(pdf.splitTextToSize(sub.replace(/▲/g, '+').replace(/▼/g, '-'), cw - 4)[0], x + 3, y + 15.3); }
+        });
+        y += ch + gap;
+      }
+      y += 2;
+    }
     else if (b.t === 'table' || b.t === 'kv') {
       const head = b.t === 'kv' ? null : [b.head];
       const avail = W - m.left - m.right;
@@ -2118,7 +2352,7 @@ function buildPdf(blocks, lh, opts) {
         alternateRowStyles: { fillColor: [244, 247, 251] }, columnStyles: b.t === 'kv' ? { 0: { fontStyle: 'bold', cellWidth: avail / 3 } } : colStyles,
         didParseCell: (d) => {
           const raw = Array.isArray(d.cell.raw) ? d.cell.raw.join(' ') : String(d.cell.raw == null ? '' : d.cell.raw);
-          if (/\{(ouro|prata|bronze|rn)\}/.test(raw)) {
+          if (/\{(ouro|prata|bronze|rn|sg|sa|sr)\}/.test(raw)) {
             const sp = splitIcons(raw); d.cell.fpnIcons = sp.icons; d.cell.text = sp.text ? [sp.text] : [];
             const pad = typeof d.cell.styles.cellPadding === 'number' ? d.cell.styles.cellPadding : 1.1;
             d.cell.styles.cellPadding = { top: pad, bottom: pad, right: pad, left: pad + sp.icons.reduce((a, k) => a + ICON_MM[k][0] * 0.85 + 0.8, 0) };
@@ -2138,7 +2372,7 @@ function buildPdf(blocks, lh, opts) {
   }
   return pdf.output('blob');
 }
-root.Letterhead = { layoutLetterhead, parseLetterhead, buildDocx, buildPdf, b64FromBytes, bytesFromB64, makeIcons, splitIcons };
+root.Letterhead = { chartPNG, layoutLetterhead, parseLetterhead, buildDocx, buildPdf, b64FromBytes, bytesFromB64, makeIcons, splitIcons };
 })(this);
 </script>
 <script>/* Relatórios (blocos) e exportação Excel */
@@ -2151,7 +2385,7 @@ const eur = v => (v == null || v === '' ? '' : Number(v).toLocaleString('pt-PT',
 function periodLabel(mode, p) { return !p || p === '*' ? 'Todas as ' + (mode === 'ano' ? 'épocas/anos' : 'épocas') : (mode === 'ano' ? 'Ano ' + p : 'Época ' + p); }
 function athName(db, r) { if (r.athleteId) { const a = C.athById(db, r.athleteId); return a ? a.name : '?'; } return r.team; }
 
-const SUM_HEAD = ['Escalão', 'Código', 'Nad.', 'Staff', 'Dias', 'Despesa', 'Provas', 'Prov. dist.', 'RP', '% RP', '% RP méd.', '1.º', '2.º', '3.º', 'Pódios', 'Final A', 'Final B', 'RN Abs', 'RN Sén', 'RN Jún', 'RN Juv'];
+const SUM_HEAD = ['Escalão', 'Código', 'Nad.', 'Staff', 'Dias', 'Despesa', 'Provas', 'Prov./nad.', 'RP', '% RP', '% RP méd.', '1.º', '2.º', '3.º', 'Pódios', 'Final A', 'Final B', 'RN Abs', 'RN Sén', 'RN Jún', 'RN Juv'];
 function sumRow(label, s, cm) {
   const rc = s.rnCat || {};
   return [label, cm ? cm.codigo || '' : '', n0(s.atletas), n0(cm ? cm.staff : ''), n0(cm ? cm.dias : ''), cm ? eur(cm.despesa) : '', s.nados, s.provas, s.rp, P(s.pctRP), P(s.pctMedio),
@@ -2175,16 +2409,13 @@ function resRow(db, r) {
 
 function competitionReport(db, comp) {
   const s = C.compSummary(db, comp);
+  const syn = synthesisComp(db, comp);
   const rs = C.enrich(db, C.compResults(db, comp.id)).sort((a, b) => (a.date || '').localeCompare(b.date || '') || C.eventSort(a.event, b.event) || C.PHASES.indexOf(a.phase) - C.PHASES.indexOf(b.phase));
-  const blocks = [
-    { t: 'title', text: comp.name },
-    { t: 'sub', text: [comp.city, comp.country].filter(Boolean).join(', ') + ' · ' + D(comp.start) + (comp.end && comp.end !== comp.start ? ' a ' + D(comp.end) : '') + ' · ' + (comp.pool === 'P25' ? 'Piscina 25 m' : 'Piscina 50 m') + ' · ' + comp.ambito },
-    { t: 'h', text: 'Resumo da participação' }
-  ];
+  const blocks = syn.concat([{ t: 'pagebreak' }, { t: 'h', text: 'Resumo da participação' }]);
   const totCm = { codigo: '', staff: s.comitivas.reduce((a, k) => a + (k.staff || 0), 0), dias: Math.max(0, ...s.comitivas.map(k => k.dias || 0)) || '', despesa: s.comitivas.reduce((a, k) => a + (k.despesa || 0), 0) };
   const sumRows = s.escaloes.map(e => sumRow(e.escalao, e, e)).concat(s.escaloes.length > 1 ? [sumRow('Total', s.total, totCm)] : []);
   splitSummary(blocks, sumRows, [], s.escaloes.length > 1);
-  blocks.push({ t: 'p', text: 'Provas: total de provas nadadas (eliminatórias, meias-finais e finais). Prov. dist.: provas diferentes por nadador. RP: provas distintas em que a melhor marca (eliminatória ou final) superou o recorde pessoal de entrada; % RP sobre as provas distintas. % RP médio: média de RP/tempo em todas as provas nadadas. Nas finais, o N.º Atl. corresponde ao total de participantes das eliminatórias.', small: true, muted: true });
+  blocks.push({ t: 'p', text: 'Provas: provas nadadas (eliminatórias, meias-finais e finais). Prov./nad.: provas diferentes nadadas por cada nadador (base do % RP). RP: provas distintas em que a melhor marca (eliminatória ou final) superou o recorde pessoal de entrada; % RP sobre as provas distintas. % RP médio: média de RP/tempo em todas as provas nadadas. Nas finais, o N.º Atl. corresponde ao total de participantes das eliminatórias.', small: true, muted: true });
   const byEsc = {};
   rs.forEach(r => (byEsc[r.escalao || '—'] = byEsc[r.escalao || '—'] || []).push(r));
   for (const e of Object.keys(byEsc)) {
@@ -2200,10 +2431,9 @@ function competitionReport(db, comp) {
 
 function periodReport(db, mode, period) {
   const d = C.dashboard(db, mode, period); const s = d.s;
-  const blocks = [{ t: 'title', text: 'Resultados Internacionais — Seleções Nacionais' }, { t: 'sub', text: periodLabel(mode, period) + ' · Natação Pura · Direção Técnica Nacional' }];
-  blocks.push({ t: 'kv', rows: [['Competições', s.competicoes], ['Nadadores', s.atletas], ['Provas (distintas)', s.nados + ' (' + s.provas + ')'], ['Recordes pessoais', s.rp + ' (' + P(s.pctRP) + ' das provas)'],
-    ['% RP médio', P(s.pctMedio)], ['Medalhas (1.º/2.º/3.º)', s.ouro + ' / ' + s.prata + ' / ' + s.bronze + ' (' + s.podios + ' pódios)'], ['Finais A / B', s.finalA + ' / ' + s.finalB],
-    ['Recordes Nacionais (total / em Seleção)', s.rnPeriodo + ' / ' + s.rnSel], ['Estágios', s.estagios], ['Despesa registada', eur(s.despesa)]] });
+  const blocks = synthesisPeriod(db, mode, period, 'Resultados Internacionais — Seleções Nacionais');
+  blocks.push({ t: 'pagebreak' });
+  blocks.push({ t: 'kv', rows: [['Estágios', s.estagios], ['Despesa registada', eur(s.despesa)]] });
   blocks.push({ t: 'h', text: 'Resumo por competição e escalão' });
   const rows = [];
   for (const c of d.comps) {
@@ -2256,7 +2486,7 @@ function cvReport(db, cv) {
     blocks.push({ t: 'table', head: ['Data', 'Atividade', 'Tipo', 'Local', 'Seleção / código'], rows: cv.convs.slice().reverse().map(v => [D(v.start), v.name, v.tipo, v.local || '', (C.convSwimmers(v).find(x => x.athleteId === a.id) || {}).group ? C.convSwimmers(v).find(x => x.athleteId === a.id).group.code : '']), widths: [8, 28, 8, 10, 10], align: ['c', null, null, null, null], small: true });
   }
   blocks.push({ t: 'h', text: 'Resumo por ' + (cv.mode === 'ano' ? 'ano civil' : 'época') });
-  blocks.push({ t: 'table', head: [cv.mode === 'ano' ? 'Ano' : 'Época', 'Comp.', 'Provas', 'Prov. dist.', 'RP', '% RP', '% RP méd.', '1.º', '2.º', '3.º', 'Final A', 'Final B', 'Meias', 'Estaf.', 'RN', 'RN Sel.'],
+  blocks.push({ t: 'table', head: [cv.mode === 'ano' ? 'Ano' : 'Época', 'Comp.', 'Provas', 'Prov./nad.', 'RP', '% RP', '% RP méd.', '1.º', '2.º', '3.º', 'Final A', 'Final B', 'Meias', 'Estaf.', 'RN', 'RN Sel.'],
     rows: cv.perPeriod.map(p => [p.period, p.competicoes, p.nados, p.provas, p.rp, P(p.pctRP), P(p.pctMedio), p.ouro, p.prata, p.bronze, p.finalA, p.finalB, p.meias, p.estafetas, p.rnTotal, p.rnSel]),
     widths: [8, 5, 5, 5, 4, 5, 6, 3, 3, 3, 5, 5, 5, 5, 4, 5], align: [null].concat(Array(15).fill('c')) });
   blocks.push({ t: 'h', text: 'Participações em competições internacionais' });
@@ -2276,7 +2506,16 @@ function cvReport(db, cv) {
 function recordsReport(db, mode, period) {
   const rs = C.recordsSummary(db, mode, period);
   const obj = o => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ': ' + v).join(' · ');
-  const blocks = [{ t: 'title', text: 'Recordes Nacionais' }, { t: 'sub', text: periodLabel(mode, period) + ' · Natação Pura' }];
+  const pp = C.prevPeriod(db, mode, period); const prs = pp ? C.recordsSummary(db, mode, pp) : null;
+  const blocks = [{ t: 'title', text: 'Recordes Nacionais' }, { t: 'sub', text: periodLabel(mode, period) + ' · Natação Pura' + (pp ? ' · comparação com ' + pp : '') }];
+  const cnt = (list, f) => list.filter(f).length;
+  blocks.push({ t: 'kpis', items: [{ label: 'Recordes Nacionais', value: rs.recs.length, delta: prs ? dlt(rs.recs.length, prs.recs.length) : '' }, { label: 'Absolutos', value: cnt(rs.recs, r => /abs/i.test(r.type)), delta: prs ? dlt(cnt(rs.recs, r => /abs/i.test(r.type)), cnt(prs.recs, r => /abs/i.test(r.type))) : '' },
+    { label: 'Em Seleção Nacional', value: cnt(rs.recs, r => r.quem === 'Seleção Nacional'), delta: prs ? dlt(cnt(rs.recs, r => r.quem === 'Seleção Nacional'), cnt(prs.recs, r => r.quem === 'Seleção Nacional')) : '' }, { label: 'Nadadores recordistas', value: new Set(rs.recs.filter(r => !(C.parseEvent(r.event) || {}).relay).flatMap(r => r.athleteIds)).size }] });
+  const abs = rs.recs.filter(r => /abs/i.test(r.type)).slice().reverse().slice(0, 10);
+  if (abs.length) { blocks.push({ t: 'h', text: 'Recordes absolutos' }); blocks.push({ t: 'list', items: abs.map(r => '{rn} ' + r.classe + ' — ' + r.holder + ' · ' + T(r.time) + ' (' + D(r.date) + ', ' + r.place + ')') }); }
+  blocks.push({ t: 'imgs', items: [img({ type: 'bar', data: { labels: rs.evolution.map(e => e.period), datasets: [{ label: 'Seleção Nacional', data: rs.evolution.map(e => e.selecao), backgroundColor: CC.navy }, { label: 'Clube', data: rs.evolution.map(e => e.clube), backgroundColor: CC.lblue }, { label: 'Sel. Territorial', data: rs.evolution.map(e => e.territorial), backgroundColor: CC.gold }] }, options: { scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } }, 82, 60, 'Evolução e contexto'),
+    img({ type: 'doughnut', data: { labels: Object.keys(rs.byCat), datasets: [{ data: Object.values(rs.byCat), backgroundColor: [CC.navy, CC.blue, CC.gold, CC.teal, CC.coral, CC.lblue] }] }, options: { plugins: { legend: { position: 'right' } } } }, 82, 60, 'Por categoria')] });
+  blocks.push({ t: 'pagebreak' });
   blocks.push({ t: 'kv', rows: [['Total de recordes', rs.recs.length], ['Por tipo', obj(rs.byType)], ['Por contexto', obj(rs.byQuem)], ['Por piscina', obj(rs.byPool)], ['Por categoria', obj(rs.byCat)], ['Por sexo', obj(rs.bySex)]] });
   blocks.push({ t: 'h', text: 'Evolução por ' + (mode === 'ano' ? 'ano civil' : 'época') });
   blocks.push({ t: 'table', head: [mode === 'ano' ? 'Ano' : 'Época', 'Total', 'Absolutos', 'Categoria', 'Seleção Nacional', 'Clube', 'Sel. Territorial', 'P50', 'P25'],
@@ -2362,6 +2601,9 @@ function estagiosReport(db, mode, period) {
   const sm = db.meta.seasonStartMonth;
   const ks = db.comitivas.filter(k => k.tipo === 'Estágio' && C.inPeriod(k.start, mode, period, sm)).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
   const blocks = [{ t: 'title', text: 'Estágios das Seleções Nacionais' }, { t: 'sub', text: periodLabel(mode, period) + ' · Natação Pura' }];
+  const mo = {}; ks.forEach(k => { if (k.start) { const m = k.start.slice(0, 7); mo[m] = (mo[m] || 0) + (k.dias || 0); } }); const mk = Object.keys(mo).sort();
+  blocks.push({ t: 'kpis', items: [{ label: 'Estágios', value: ks.length }, { label: 'Dias de estágio', value: ks.reduce((a, k) => a + (k.dias || 0), 0) }, { label: 'Participações de nadadores', value: ks.reduce((a, k) => a + (k.nadadores || 0), 0) }, { label: 'Participações de staff', value: ks.reduce((a, k) => a + (k.staff || 0), 0) }] });
+  if (mk.length) blocks.push({ t: 'img', ...img({ type: 'bar', data: { labels: mk.map(k => k.slice(5) + '/' + k.slice(2, 4)), datasets: [{ label: 'Dias de estágio', data: mk.map(k => mo[k]), backgroundColor: CC.teal }] }, options: { plugins: { legend: { display: false } } } }, 150, 45), caption: 'Dias de estágio por mês' });
   blocks.push({ t: 'kv', rows: [['Estágios', ks.length], ['Dias de estágio', ks.reduce((a, k) => a + (k.dias || 0), 0)], ['Participações de nadadores', ks.reduce((a, k) => a + (k.nadadores || 0), 0)], ['Participações de staff', ks.reduce((a, k) => a + (k.staff || 0), 0)], ['Despesa', eur(ks.reduce((a, k) => a + (k.despesa || 0), 0))]] });
   blocks.push({ t: 'table', head: ['Início', 'Fim', 'Estágio', 'Local', 'Código', 'Escalão', 'Nad.', 'Staff', 'Dias', 'Despesa'],
     rows: ks.map(k => [D(k.start), D(k.end), k.name, k.local || '', k.code, k.escalao, n0(k.nadadores), n0(k.staff), n0(k.dias), eur(k.despesa)]), widths: [9, 9, 26, 10, 9, 8, 5, 5, 5, 8], align: ['c', 'c', null, null, null, null, 'c', 'c', 'c', 'r'], small: true });
@@ -2376,6 +2618,120 @@ function staffReport(db, mode, period) {
     blocks.push({ t: 'table', head: ['Início', 'Atividade', 'Tipo', 'Função'], rows: r.acts.map(v => [D(v.start), v.name, v.tipo, v.staff.filter(s => s.personId === r.person.id).map(s => s.role).join(', ')]), widths: [8, 30, 8, 14], small: true });
   }
   return { title: 'Staff ' + periodLabel(mode, period), file: 'Staff_' + safe(periodLabel(mode, period)), blocks };
+}
+/* ---------- Síntese (1.ª página) ---------- */
+const LEGEND = 'Provas: provas nadadas (eliminatórias, meias-finais e finais). Prov./nad.: provas diferentes nadadas por cada nadador. % RP: provas por nadador em que a melhor marca superou o RP de entrada. % RP médio: média de RP/tempo em todas as provas nadadas.';
+const CC = { navy: '#042C53', blue: '#185FA5', lblue: '#85B7EB', gold: '#BA7517', teal: '#1D9E75', coral: '#D85A30', ouro: '#E9C031', prata: '#AEB4BA', bronze: '#CD8A4E' };
+function dlt(cur, prev, pct) {
+  if (prev == null || cur == null) return '';
+  if (pct) { const d = (cur - prev) * 100; if (Math.abs(d) < 0.05) return '= ' ; return (d > 0 ? '▲ ' : '▼ ') + Math.abs(d).toFixed(1).replace('.', ',') + ' p.p.'; }
+  const d = cur - prev; return d === 0 ? '=' : (d > 0 ? '▲ ' : '▼ ') + Math.abs(d);
+}
+function img(cfg, wmm, hmm, title) { const L = root.Letterhead; const data = L && L.chartPNG ? L.chartPNG(cfg, Math.round(wmm * 4), Math.round(hmm * 4)) : null; return { data, w: wmm, h: hmm, title }; }
+function kpiSet(s, prev, extra) {
+  const items = [
+    { label: 'Competições', value: s.competicoes, delta: prev ? dlt(s.competicoes, prev.competicoes) : '' },
+    { label: 'Nadadores', value: s.atletas, delta: prev ? dlt(s.atletas, prev.atletas) : '' },
+    { label: 'Provas nadadas', value: s.nados, sub: s.provas + ' por nadador', delta: prev ? dlt(s.nados, prev.nados) : '' },
+    { label: 'Medalhas', value: s.podios, sub: s.ouro + ' ouro · ' + s.prata + ' prata · ' + s.bronze + ' bronze', delta: prev ? dlt(s.podios, prev.podios) : '' },
+    { label: 'Finais A', value: s.finalA, sub: s.finalB + ' finais B', delta: prev ? dlt(s.finalA, prev.finalA) : '' },
+    { label: 'Recordes pessoais', value: P(s.pctRP) || '—', sub: s.rp + ' de ' + s.provas, delta: prev ? dlt(s.pctRP, prev.pctRP, true) : '' },
+    { label: '% RP médio', value: P(s.pctMedio) || '—', delta: prev ? dlt(s.pctMedio, prev.pctMedio, true) : '' },
+    { label: 'Recordes Nacionais', value: s.rnPeriodo != null ? s.rnPeriodo : s.rnComp, sub: s.rnSel != null ? s.rnSel + ' em Seleção' : '', delta: prev && s.rnPeriodo != null ? dlt(s.rnPeriodo, prev.rnPeriodo) : '' }
+  ];
+  return items.concat(extra || []);
+}
+function highlightsPeriod(db, mode, period) {
+  const sm = db.meta.seasonStartMonth; const out = [];
+  const rs = C.enrich(db, db.results.filter(r => C.inPeriod(r.date, mode, period, sm)));
+  const meds = rs.filter(r => C.MEDAL_PHASES.has(r.phase) && r.place >= 1 && r.place <= 3).map(r => ({ r, c: C.compById(db, r.compId), t: C.compTier(C.compById(db, r.compId)) }))
+    .sort((a, b) => ((a.t || { order: 99 }).order - (b.t || { order: 99 }).order) || a.r.place - b.r.place);
+  for (const m of meds.filter(x => x.t).slice(0, 8)) out.push(['', '{ouro}', '{prata}', '{bronze}'][m.r.place] + ' ' + athName(db, m.r) + ' — ' + m.r.event + ', ' + m.t.label + (m.c.city ? ' (' + m.c.city + ')' : '') + ' · ' + T(m.r.time));
+  const finals = rs.filter(r => r.phase === 'Final A' && r.athleteId && C.compTier(C.compById(db, r.compId)) && !(r.place <= 3));
+  if (finals.length) out.push(finals.length + ' outras finais A em Jogos, Mundiais e Europeus' + (finals.length <= 6 ? ': ' + finals.map(r => athName(db, r) + ' (' + r.event + ', ' + r.place + '.º)').join('; ') : ''));
+  const rn = db.records.filter(r => C.inPeriod(r.date, mode, period, sm) && r.quem === 'Seleção Nacional' && /abs/i.test(r.type));
+  if (rn.length) out.push('{rn} ' + rn.length + ' Recorde(s) Nacional(ais) absoluto(s) em Seleção: ' + rn.slice(0, 6).map(r => r.holder.split(',')[0] + ' — ' + r.event + ' ' + T(r.time)).join('; ') + (rn.length > 6 ? '…' : ''));
+  const comps = [...new Set(rs.map(r => r.compId))].map(id => ({ c: C.compById(db, id), s: C.summarize(db, rs.filter(r => r.compId === id)) })).filter(x => x.s.pctMedio && x.s.nados >= 10).sort((a, b) => b.s.pctMedio - a.s.pctMedio);
+  if (comps.length) out.push('Melhor % RP médio: ' + comps[0].c.name + ' (' + P(comps[0].s.pctMedio) + ')' + (comps.length > 1 ? '; mais baixo: ' + comps[comps.length - 1].c.name + ' (' + P(comps[comps.length - 1].s.pctMedio) + ')' : ''));
+  return out;
+}
+function goalsBlock(db, mode, period) {
+  const gs = C.goalStatus(db, mode, period); if (!gs || !gs.length) return [];
+  return [{ t: 'h', text: 'Metas do PAR' }, { t: 'table', head: ['Indicador', 'Meta', 'Realizado', 'Cumprimento'], rows: gs.map(g => [g.label, g.pct ? g.target + '%' : g.target, g.pct ? P(g.value) : g.value, '{' + (g.light === 'green' ? 'sg' : g.light === 'amber' ? 'sa' : 'sr') + '} ' + (g.ratio != null ? Math.round(g.ratio * 100) + '%' : '—')]), widths: [18, 6, 7, 8], align: [null, 'c', 'c', null] }];
+}
+function periodCharts(db, mode, period) {
+  const d = C.dashboard(db, mode, period);
+  const comps = d.comps; const sums = comps.map(c => C.compSummary(db, c).total);
+  const labels = comps.map(c => (c.name.length > 26 ? c.name.slice(0, 25) + '…' : c.name));
+  const a = img({ type: 'bar', data: { labels, datasets: [{ label: 'Provas', data: sums.map(x => x.nados), backgroundColor: CC.lblue, stack: 'p' }, { label: 'Ouro', data: sums.map(x => x.ouro), backgroundColor: CC.ouro, stack: 'm' }, { label: 'Prata', data: sums.map(x => x.prata), backgroundColor: CC.prata, stack: 'm' }, { label: 'Bronze', data: sums.map(x => x.bronze), backgroundColor: CC.bronze, stack: 'm' }] },
+    options: { indexAxis: 'y', scales: { x: { stacked: true, beginAtZero: true }, y: { stacked: true, ticks: { font: { size: 9 } } } } } }, 88, Math.max(60, Math.min(120, comps.length * 5 + 20)), 'Provas e medalhas por competição');
+  const per = C.periodsOf(db, mode).slice(-5); const evo = per.map(p => C.dashboard(db, mode, p).s);
+  const b = img({ type: 'bar', data: { labels: per, datasets: [{ label: 'Nadadores', data: evo.map(x => x.atletas), backgroundColor: CC.blue }, { label: 'Medalhas', data: evo.map(x => x.podios), backgroundColor: CC.gold }, { label: 'Finais A', data: evo.map(x => x.finalA), backgroundColor: CC.teal }, { label: 'RN', data: evo.map(x => x.rnPeriodo), backgroundColor: CC.navy }] }, options: { scales: { y: { beginAtZero: true } } } }, 80, 62, 'Evolução por ' + (mode === 'ano' ? 'ano civil' : 'época'));
+  return { t: 'imgs', items: [a, b] };
+}
+function synthesisPeriod(db, mode, period, title) {
+  const s = C.dashboard(db, mode, period).s; const pp = C.prevPeriod(db, mode, period);
+  const prev = pp ? C.dashboard(db, mode, pp).s : null;
+  const blocks = [{ t: 'title', text: title }, { t: 'sub', text: periodLabel(mode, period) + ' · Natação Pura · Direção Técnica Nacional' + (pp ? ' · comparação com ' + pp : '') }];
+  blocks.push({ t: 'kpis', items: kpiSet(s, prev) });
+  const hl = highlightsPeriod(db, mode, period);
+  if (hl.length) { blocks.push({ t: 'h', text: 'Destaques' }); blocks.push({ t: 'list', items: hl }); }
+  blocks.push(...goalsBlock(db, mode, period));
+  blocks.push(periodCharts(db, mode, period));
+  blocks.push({ t: 'p', text: LEGEND, small: true, muted: true });
+  return blocks;
+}
+function synthesisComp(db, comp) {
+  const s = C.compSummary(db, comp); const t = s.total; const pe = C.prevEdition(db, comp);
+  const pt = pe ? C.compSummary(db, pe).total : null;
+  const rs = C.enrich(db, C.compResults(db, comp.id));
+  const items = [{ label: 'Nadadores', value: t.atletas, delta: pt ? dlt(t.atletas, pt.atletas) : '' }, { label: 'Provas nadadas', value: t.nados, sub: t.provas + ' por nadador', delta: pt ? dlt(t.nados, pt.nados) : '' },
+    { label: 'Medalhas', value: t.podios, sub: t.ouro + ' · ' + t.prata + ' · ' + t.bronze, delta: pt ? dlt(t.podios, pt.podios) : '' }, { label: 'Finais A / B', value: t.finalA + ' / ' + t.finalB, delta: pt ? dlt(t.finalA, pt.finalA) : '' },
+    { label: 'Recordes pessoais', value: P(t.pctRP) || '—', sub: t.rp + ' de ' + t.provas, delta: pt ? dlt(t.pctRP, pt.pctRP, true) : '' }, { label: '% RP médio', value: P(t.pctMedio) || '—', delta: pt ? dlt(t.pctMedio, pt.pctMedio, true) : '' },
+    { label: 'Recordes Nacionais', value: t.rnComp, delta: pt ? dlt(t.rnComp, pt.rnComp) : '' }, { label: 'Staff / dias', value: (s.comitivas.reduce((a, k) => a + (k.staff || 0), 0) || '—') + ' / ' + (Math.max(0, ...s.comitivas.map(k => k.dias || 0)) || '—') }];
+  const hl = [];
+  rs.filter(r => C.MEDAL_PHASES.has(r.phase) && r.place >= 1 && r.place <= 3).sort((a, b) => a.place - b.place).forEach(r => hl.push(['', '{ouro}', '{prata}', '{bronze}'][r.place] + ' ' + athName(db, r) + ' — ' + r.event + ' · ' + T(r.time) + (r.rn ? ' {rn}' : '')));
+  const fa = rs.filter(r => r.phase === 'Final A' && !(r.place <= 3));
+  if (fa.length) hl.push('Finais A: ' + fa.map(r => athName(db, r) + ' (' + r.event + ', ' + C.placeLabel(r) + ')').join('; '));
+  if (s.records.length) hl.push('{rn} Recordes Nacionais: ' + s.records.map(r => r.classe + ' — ' + r.holder.split(',')[0] + ' ' + T(r.time)).join('; '));
+  const byAth = {}; rs.filter(r => r.athleteId && r.pct).forEach(r => { (byAth[r.athleteId] = byAth[r.athleteId] || []).push(r.pct); });
+  const arr = Object.entries(byAth).map(([id, v]) => ({ n: (C.athById(db, id) || {}).name || '?', v: v.reduce((a, b) => a + b, 0) / v.length })).sort((a, b) => b.v - a.v);
+  const blocks = [{ t: 'title', text: comp.name }, { t: 'sub', text: [comp.city, comp.country].filter(Boolean).join(', ') + ' · ' + D(comp.start) + (comp.end && comp.end !== comp.start ? ' a ' + D(comp.end) : '') + ' · ' + (comp.pool === 'P25' ? 'Piscina 25 m' : 'Piscina 50 m') + (pe ? ' · comparação com a edição de ' + (pe.start || '').slice(0, 4) : '') }];
+  blocks.push({ t: 'kpis', items });
+  if (hl.length) { blocks.push({ t: 'h', text: 'Destaques' }); blocks.push({ t: 'list', items: hl }); }
+  if (arr.length) blocks.push({ t: 'img', ...img({ type: 'bar', data: { labels: arr.map(x => x.n), datasets: [{ label: '% RP médio', data: arr.map(x => +(x.v * 100).toFixed(1)), backgroundColor: arr.map(x => x.v >= 1 ? CC.teal : x.v >= 0.98 ? CC.blue : CC.coral) }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: Math.min(94, Math.floor(Math.min(...arr.map(x => x.v * 100)))), ticks: { callback: v => v + '%' } }, y: { ticks: { font: { size: 9 } } } } } }, 160, Math.max(45, Math.min(110, arr.length * 5 + 15))), caption: '% RP médio por nadador (verde: acima do RP de entrada)' });
+  if (pt) blocks.push({ t: 'h2', text: 'Comparação com a edição anterior (' + (pe.start || '').slice(0, 4) + ')' }, { t: 'table', head: ['Indicador', (pe.start || '').slice(0, 4), (comp.start || '').slice(0, 4), 'Variação'], rows: [['Nadadores', pt.atletas, t.atletas, dlt(t.atletas, pt.atletas)], ['Provas nadadas', pt.nados, t.nados, dlt(t.nados, pt.nados)], ['Medalhas', pt.podios, t.podios, dlt(t.podios, pt.podios)], ['Finais A', pt.finalA, t.finalA, dlt(t.finalA, pt.finalA)], ['% RP', P(pt.pctRP), P(t.pctRP), dlt(t.pctRP, pt.pctRP, true)], ['% RP médio', P(pt.pctMedio), P(t.pctMedio), dlt(t.pctMedio, pt.pctMedio, true)]].map(r => r.map(x => String(x == null ? '' : x).replace(/▲/g, '+').replace(/▼/g, '−'))), widths: [12, 6, 6, 8], align: [null, 'c', 'c', 'c'] });
+  return blocks;
+}
+function nadadoresReport(db, mode, period) {
+  const sm = db.meta.seasonStartMonth;
+  const rs = db.results.filter(r => C.inPeriod(r.date, mode, period, sm));
+  const ids = new Set(); rs.forEach(r => { if (r.athleteId) ids.add(r.athleteId); });
+  const rows = [...ids].map(id => { const a = C.athById(db, id); const ind = rs.filter(r => r.athleteId === id); const s = C.summarize(db, ind); const rn = db.records.filter(x => x.athleteIds.includes(id) && C.inPeriod(x.date, mode, period, sm)).length; return { a, s, rn }; }).filter(x => x.a)
+    .sort((x, y) => y.s.ouro - x.s.ouro || y.s.podios - x.s.podios || y.s.finalA - x.s.finalA || y.rn - x.rn || x.a.name.localeCompare(y.a.name));
+  const blocks = [{ t: 'title', text: 'Nadadores internacionais' }, { t: 'sub', text: periodLabel(mode, period) + ' · Natação Pura' }];
+  blocks.push({ t: 'kpis', items: [{ label: 'Nadadores', value: rows.length, sub: rows.filter(x => x.a.sex === 'F').length + ' F · ' + rows.filter(x => x.a.sex === 'M').length + ' M' }, { label: 'Medalhados', value: rows.filter(x => x.s.podios).length }, { label: 'Finalistas A', value: rows.filter(x => x.s.finalA).length }, { label: 'Com Recorde Nacional', value: rows.filter(x => x.rn).length }] });
+  const top = rows.filter(x => x.s.podios).slice(0, 12);
+  if (top.length) blocks.push({ t: 'img', ...img({ type: 'bar', data: { labels: top.map(x => x.a.name), datasets: [{ label: 'Ouro', data: top.map(x => x.s.ouro), backgroundColor: CC.ouro }, { label: 'Prata', data: top.map(x => x.s.prata), backgroundColor: CC.prata }, { label: 'Bronze', data: top.map(x => x.s.bronze), backgroundColor: CC.bronze }] }, options: { indexAxis: 'y', scales: { x: { stacked: true }, y: { stacked: true, ticks: { font: { size: 9 } } } } } }, 160, Math.max(45, top.length * 6 + 15)), caption: 'Nadadores com mais medalhas' });
+  blocks.push({ t: 'h', text: 'Quadro de nadadores' });
+  blocks.push({ t: 'table', head: ['Nadador', 'Clube', 'Comp.', 'Provas', 'RP', '% RP', 'Medalhas', 'Final A', 'RN'], rows: rows.map(x => [x.a.name, x.a.club || '', new Set(rs.filter(r => r.athleteId === x.a.id).map(r => r.compId)).size, x.s.nados, x.s.rp, P(x.s.pctRP), (x.s.ouro ? '{ouro}' : '') + (x.s.prata ? '{prata}' : '') + (x.s.bronze ? '{bronze}' : '') + ' ' + (x.s.podios ? x.s.ouro + '/' + x.s.prata + '/' + x.s.bronze : ''), x.s.finalA, x.rn || '']),
+    widths: [20, 7, 5, 5, 4, 6, 11, 5, 4], align: [null, null, 'c', 'c', 'c', 'c', null, 'c', 'c'], small: true });
+  return { title: 'Nadadores ' + periodLabel(mode, period), file: 'Nadadores_' + safe(periodLabel(mode, period)), blocks };
+}
+function cvShortReport(db, cv) {
+  const a = cv.athlete; const t = cv.total;
+  const span = cv.periods.length ? (cv.periods[0] === cv.periods[cv.periods.length - 1] ? cv.periods[0] : cv.periods[0] + ' – ' + cv.periods[cv.periods.length - 1]) : '—';
+  const blocks = [{ t: 'title', text: a.name }, { t: 'sub', text: 'Currículo desportivo internacional — síntese · ' + (cv.mode === 'ano' ? 'Ano civil ' : 'Época ') + span + (a.club ? ' · ' + a.club : '') + (a.birth ? ' · n. ' + (a.birth || '').slice(0, 4) : '') }];
+  blocks.push({ t: 'kpis', items: [{ label: 'Competições internacionais', value: t.competicoes }, { label: 'Medalhas', value: t.podios, sub: t.ouro + ' ouro · ' + t.prata + ' prata · ' + t.bronze + ' bronze' }, { label: 'Finais A', value: t.finalA, sub: t.meias + ' meias-finais' }, { label: 'Recordes Nacionais', value: t.rnTotal, sub: t.rnSel + ' em Seleção' }] });
+  const main = cv.main.filter(m => m.medal || m.phase === 'Final A' || m.phase === 'Meia-Final' || m.rn).slice(0, 10);
+  if (main.length) { blocks.push({ t: 'h', text: 'Principais resultados' }); blocks.push({ t: 'list', items: main.map(m => (m.medal ? ['', '{ouro}', '{prata}', '{bronze}'][m.medal] + ' ' : '') + m.tier.label + ' ' + (m.date || '').slice(0, 4) + ' — ' + m.event + ': ' + (m.medal ? m.medal + '.º lugar' : m.phase + ', ' + (m.placeText || '')) + ' · ' + T(m.best) + (m.rn ? ' {rn}' : '')) }); }
+  const pods = cv.podiums.filter(p => !p.tier).slice(0, 6);
+  if (pods.length) { blocks.push({ t: 'h', text: 'Outros pódios internacionais' }); blocks.push({ t: 'list', items: pods.map(p => ['', '{ouro}', '{prata}', '{bronze}'][p.medal] + ' ' + p.event + ' — ' + p.comp.name + ' (' + (p.date || '').slice(0, 4) + ') · ' + T(p.best)) }); }
+  const rnAbs = cv.records.filter(r => /abs/i.test(r.type)).slice(-5).reverse();
+  if (cv.records.length) { blocks.push({ t: 'h', text: 'Recordes Nacionais' }); blocks.push({ t: 'list', items: (rnAbs.length ? rnAbs : cv.records.slice(-5).reverse()).map(r => '{rn} ' + r.classe + ' — ' + T(r.time) + ' (' + D(r.date) + ', ' + r.place + ')').concat(cv.records.length > 5 ? [cv.records.length + ' recordes no total (' + cv.records.filter(r => /abs/i.test(r.type)).length + ' absolutos)'] : []) }); }
+  const best = cv.bests.filter(b => C.isOlympic(b.event)).slice(0, 8);
+  if (best.length) { blocks.push({ t: 'h', text: 'Melhores marcas em competição internacional' }); blocks.push({ t: 'table', head: ['Prova', 'Piscina', 'Tempo', 'Competição', 'Data'], rows: best.map(b => [b.event, b.pool, T(b.time), b.comp, D(b.date)]), widths: [10, 5, 6, 26, 7], align: [null, 'c', 'r', null, 'c'], small: true }); }
+  return { title: 'Currículo ' + a.name, file: 'Curriculo_sintese_' + safe(a.name), blocks };
 }
 function safe(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60); }
 
@@ -2392,6 +2748,21 @@ async function blocksToXlsx(rep) {
     else if (b.t === 'sub') { const c = ws.getCell(row, 1); c.value = b.text; c.font = { name: 'Calibri', size: 10, color: { argb: BLUE } }; row += 2; }
     else if (b.t === 'h' || b.t === 'h2') { const c = ws.getCell(row, 1); c.value = b.text; c.font = { name: 'Calibri', size: b.t === 'h' ? 12 : 11, bold: true, color: { argb: b.t === 'h' ? NAVY : BLUE } }; c.border = { bottom: { style: 'thin', color: { argb: GOLD } } }; row++; }
     else if (b.t === 'p') { const c = ws.getCell(row, 1); c.value = b.text; c.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF5F5E5A' } }; row++; }
+    else if (b.t === 'kpis') {
+      b.items.forEach((k, i) => { const col = (i % 4) * 2 + 1; const r0 = row + Math.floor(i / 4) * 3;
+        const a = ws.getCell(r0, col); a.value = k.label; a.font = { name: 'Calibri', size: 9, color: { argb: 'FF5F5E5A' } };
+        const v = ws.getCell(r0 + 1, col); v.value = typeof k.value === 'number' ? k.value : String(k.value); v.font = { name: 'Calibri', size: 16, bold: true, color: { argb: NAVY } }; v.alignment = { horizontal: 'left' };
+        const d = ws.getCell(r0 + 2, col); d.value = [k.sub, k.delta].filter(Boolean).join(' · '); d.font = { name: 'Calibri', size: 9, color: { argb: /▲/.test(k.delta || '') ? 'FF1D9E75' : /▼/.test(k.delta || '') ? 'FFA32D2D' : 'FF5F5E5A' } };
+        [a, v, d].forEach(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF3F9' } }; }); setW(col - 1, 16); });
+      row += Math.ceil(b.items.length / 4) * 3 + 1;
+    }
+    else if (b.t === 'list') { for (const it of b.items) { const c = ws.getCell(row, 1); c.value = '• ' + String(it).replace(/\{rn\}/g, 'RN').replace(/\{ouro\}/g, 'Ouro').replace(/\{prata\}/g, 'Prata').replace(/\{bronze\}/g, 'Bronze').replace(/\{s[gar]\}/g, ''); c.font = { name: 'Calibri', size: 10 }; row++; } row++; }
+    else if (b.t === 'img' || b.t === 'imgs') {
+      const its = (b.t === 'img' ? [b] : b.items).filter(i => i.data);
+      its.forEach((i, k) => { const id = wb.addImage({ base64: i.data, extension: 'png' }); ws.addImage(id, { tl: { col: k * 6, row: row - 1 }, ext: { width: i.w * 3.2, height: i.h * 3.2 } }); });
+      if (its.length) row += Math.ceil(Math.max(...its.map(i => i.h)) * 3.2 / 20) + 2;
+    }
+    else if (b.t === 'pagebreak') { row++; }
     else if (b.t === 'kv') {
       for (const [k, v] of b.rows) { const a = ws.getCell(row, 1), c = ws.getCell(row, 2); a.value = k; c.value = v; a.font = { name: 'Calibri', size: 10, bold: true, color: { argb: NAVY } }; c.font = { name: 'Calibri', size: 10 }; setW(0, String(k).length); row++; }
       row++;
@@ -2487,7 +2858,7 @@ async function fullWorkbook(db, mode, period, legacyOnly) {
   const buf = await wb.xlsx.writeBuffer();
   return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
-root.Reports = { convocatoriaReport, convTitle, convDaysList, ptDateRange, estagiosReport, staffReport, placeCell, competitionReport, periodReport, cvReport, recordsReport, blocksToXlsx, fullWorkbook, periodLabel, safe, athName, SUM_HEAD, sumRow, RES_HEAD, resRow };
+root.Reports = { nadadoresReport, cvShortReport, synthesisPeriod, LEGEND, convocatoriaReport, convTitle, convDaysList, ptDateRange, estagiosReport, staffReport, placeCell, competitionReport, periodReport, cvReport, recordsReport, blocksToXlsx, fullWorkbook, periodLabel, safe, athName, SUM_HEAD, sumRow, RES_HEAD, resRow };
 })(this);
 </script>
 <script>/* Aplicação — Resultados Internacionais FPN */
@@ -2512,7 +2883,7 @@ let saveTimer = null;
 function save(action, detail) {
   if (action) C.logChange(db, action, detail || '');
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => { try { await IDB.set('db', JSON.stringify(db)); $('#savestate').textContent = 'Gravado ' + new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }); } catch (e) { toast('Erro ao gravar: ' + e.message, true); } }, 250);
+  saveTimer = setTimeout(async () => { try { await IDB.set('db', JSON.stringify(db)); $('#savestate').textContent = 'Gravado ' + new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }); if (typeof bkRun === 'function') bkRun(false); } catch (e) { toast('Erro ao gravar: ' + e.message, true); } }, 250);
   $('#savestate').textContent = 'A gravar…';
 }
 function toast(msg, bad) { const t = $('#toast'); t.textContent = msg; t.className = 'toast show' + (bad ? ' bad' : ''); clearTimeout(t._h); t._h = setTimeout(() => t.className = 'toast', 3500); }
@@ -2528,8 +2899,8 @@ async function exportReport(rep, fmt) {
     else if (fmt === 'all') { await exportReport(rep, 'docx'); await exportReport(rep, 'pdf'); }
   } catch (e) { console.error(e); toast('Erro na exportação: ' + e.message, true); }
 }
-function exportBar(id) {
-  return '<div class="expbar" data-exp="' + id + '"><span class="muted">Exportar</span><button data-fmt="xlsx">Excel</button><button data-fmt="docx">Word</button><button data-fmt="pdf">PDF</button><button data-fmt="all" class="gold">Word + PDF</button></div>';
+function exportBar(id, label) {
+  return '<div class="expbar" data-exp="' + id + '"><span class="muted">' + (label || 'Exportar') + '</span><button data-fmt="xlsx">Excel</button><button data-fmt="docx">Word</button><button data-fmt="pdf">PDF</button><button data-fmt="all" class="gold">Word + PDF</button></div>';
 }
 function bindExport(id, fn) { $$('[data-exp="' + id + '"] button').forEach(b => b.onclick = () => exportReport(fn(), b.dataset.fmt)); }
 
@@ -2563,6 +2934,8 @@ function backupBadge() {
   b.title = days > 7 ? 'Recomenda-se um backup (mais de 7 dias)' : '';
 }
 function h(tag, html, cls) { const e = document.createElement(tag); if (cls) e.className = cls; e.innerHTML = html; return e; }
+function dk(cur, prev, pct) { if (prev == null || cur == null) return ''; const d = pct ? (cur - prev) * 100 : cur - prev; if (Math.abs(d) < (pct ? 0.05 : 0.5)) return ' <span class="dz">=</span>'; return ' <span class="' + (d > 0 ? 'dup' : 'ddn') + '">' + (d > 0 ? '▲' : '▼') + ' ' + (pct ? Math.abs(d).toFixed(1).replace('.', ',') + ' p.p.' : Math.abs(d)) + '</span>'; }
+function kpiH(label, val, subHtml) { return '<div class="kpi"><div class="kl">' + esc(label) + '</div><div class="kv">' + esc(val) + '</div>' + (subHtml ? '<div class="ks">' + subHtml + '</div>' : '') + '</div>'; }
 function kpi(label, val, sub) { return '<div class="kpi"><div class="kl">' + esc(label) + '</div><div class="kv">' + esc(val) + '</div>' + (sub ? '<div class="ks">' + esc(sub) + '</div>' : '') + '</div>'; }
 function table(head, rows, opts) {
   opts = opts || {};
@@ -2578,14 +2951,18 @@ function medals(s) { return (s.ouro ? '<span class="md g">' + s.ouro + '</span>'
 /* ---------- Painel ---------- */
 function viewPainel(main) {
   const top = h('div', '<h1>Painel</h1>', 'vhead'); top.appendChild(periodControls(route)); main.appendChild(top);
+  alertsBox(main);
   const d = C.dashboard(db, ui.mode, ui.period); const s = d.s;
-  main.appendChild(h('div', kpi('Competições', s.competicoes) + kpi('Nadadores', s.atletas) + kpi('Provas', s.nados, s.provas + ' provas distintas') +
-    kpi('Recordes pessoais', s.rp, P(s.pctRP) + ' das provas distintas') + kpi('% RP médio', P(s.pctMedio) || '—') + kpi('Medalhas', s.ouro + s.prata + s.bronze, s.ouro + ' ouro · ' + s.prata + ' prata · ' + s.bronze + ' bronze') +
-    kpi('Finais A', s.finalA, s.finalB + ' finais B') + kpi('Recordes Nacionais', s.rnPeriodo, s.rnSel + ' em Seleção') + kpi('Estágios', s.estagios) + kpi('Despesa', s.despesa ? s.despesa.toLocaleString('pt-PT') + ' €' : '—'), 'kpis'));
+  const pp = C.prevPeriod(db, ui.mode, ui.period); const ps = pp ? C.dashboard(db, ui.mode, pp).s : null;
+  main.appendChild(h('div', kpiH('Competições', s.competicoes, dk(s.competicoes, ps && ps.competicoes)) + kpiH('Nadadores', s.atletas, dk(s.atletas, ps && ps.atletas)) + kpiH('Provas nadadas', s.nados, s.provas + ' por nadador' + dk(s.nados, ps && ps.nados)) +
+    kpiH('Recordes pessoais', P(s.pctRP) || '—', s.rp + ' de ' + s.provas + dk(s.pctRP, ps && ps.pctRP, true)) + kpiH('% RP médio', P(s.pctMedio) || '—', dk(s.pctMedio, ps && ps.pctMedio, true)) + kpiH('Medalhas', s.podios, s.ouro + ' · ' + s.prata + ' · ' + s.bronze + dk(s.podios, ps && ps.podios)) +
+    kpiH('Finais A', s.finalA, s.finalB + ' finais B' + dk(s.finalA, ps && ps.finalA)) + kpiH('Recordes Nacionais', s.rnPeriodo, s.rnSel + ' em Seleção' + dk(s.rnPeriodo, ps && ps.rnPeriodo)) + kpiH('Estágios', s.estagios) + kpiH('Despesa', s.despesa ? s.despesa.toLocaleString('pt-PT') + ' €' : '—'), 'kpis'));
+  if (pp) main.appendChild(h('p', 'Variações face a ' + esc(pp) + '.', 'muted small'));
+  goalsBox(main);
   const sec = h('section', '<div class="shead"><h2>Competições — ' + esc(R.periodLabel(ui.mode, ui.period)) + '</h2>' + exportBar('per') + '</div>');
   const rows = d.comps.map(c => { const cs = C.compSummary(db, c); const t = cs.total;
     return tr([D(c.start), '<a href="#comp/' + c.id + '">' + esc(c.name) + '</a>', esc(c.city || ''), cs.escaloes.map(e => esc(e.escalao)).join(', '), t.atletas, t.nados, t.provas, t.rp, P(t.pctRP), P(t.pctMedio), medals(t), t.finalA, t.rnComp || ''], '', [4, 5, 6, 7, 8, 9, 11, 12]); });
-  sec.insertAdjacentHTML('beforeend', table(['Data', 'Competição', 'Local', 'Escalões', 'Nad.', 'Provas', 'Prov. dist.', 'RP', '% RP', '% RP méd.', 'Medalhas', 'Final A', 'RN'], rows, { num: [4, 5, 6, 7, 8, 9, 11, 12] }));
+  sec.insertAdjacentHTML('beforeend', table(['Data', 'Competição', 'Local', 'Escalões', 'Nad.', 'Provas', 'Prov./nad.', 'RP', '% RP', '% RP méd.', 'Medalhas', 'Final A', 'RN'], rows, { num: [4, 5, 6, 7, 8, 9, 11, 12] }));
   main.appendChild(sec); bindExport('per', () => R.periodReport(db, ui.mode, ui.period));
   // qualidade dos dados
 }
@@ -2602,13 +2979,14 @@ function possibleDuplicates() {
 function viewCompeticoes(main) {
   const top = h('div', '<h1>Competições</h1>', 'vhead'); top.appendChild(periodControls(route)); main.appendChild(top);
   dashCompeticoes(main);
-  const bar = h('div', '<input id="q" placeholder="Procurar competição, cidade ou país…" value=""><button id="newc" class="pri">Nova competição</button><button id="merge">Fundir selecionadas</button>', 'toolbar');
+  const bar = h('div', '<input id="q" placeholder="Procurar competição, cidade ou país…" value=""><select id="ft"><option value="">Todas as competições</option><option value="p">Jogos, Mundiais e Europeus</option><option value="1">Jogos Olímpicos</option><option value="2">Campeonatos do Mundo</option><option value="3">Campeonatos da Europa</option><option value="4">Outros Jogos</option><option value="o">Outras competições</option></select><button id="newc" class="pri">Nova competição</button><button id="merge">Fundir selecionadas</button>', 'toolbar');
   main.appendChild(bar);
   const list = h('div', ''); main.appendChild(list);
   const sm = db.meta.seasonStartMonth;
   const draw = () => {
     const q = C.norm($('#q').value);
-    const comps = db.competitions.filter(c => (!c.start ? ui.period === '*' : C.inPeriod(c.start, ui.mode, ui.period, sm)) && (!q || C.norm(c.name + ' ' + c.city + ' ' + c.country).includes(q)))
+    const ft = $('#ft').value;
+    const comps = db.competitions.filter(c => (!c.start ? ui.period === '*' : C.inPeriod(c.start, ui.mode, ui.period, sm)) && (!q || C.norm(c.name + ' ' + c.city + ' ' + c.country).includes(q)) && (!ft || (ft === 'p' ? !!C.compTier(c) : ft === 'o' ? !C.compTier(c) : (C.compTier(c) || {}).tier === +ft)))
       .sort((a, b) => (b.start || '9').localeCompare(a.start || '9'));
     list.innerHTML = table(['', 'Data', 'Competição', 'Local', 'Âmbito', 'Pisc.', 'Nad.', 'Provas', 'Medalhas', 'Final A', 'RN'], comps.map(c => {
       const t = C.compSummary(db, c).total;
@@ -2616,7 +2994,7 @@ function viewCompeticoes(main) {
     }));
     $$('[data-sel]', list).forEach(cb => cb.onchange = () => { cb.checked ? ui.compSel.add(cb.dataset.sel) : ui.compSel.delete(cb.dataset.sel); });
   };
-  $('#q').oninput = draw; draw();
+  $('#q').oninput = draw; $('#ft').onchange = draw; draw();
   $('#newc').onclick = () => compForm(null);
   $('#merge').onclick = () => {
     const ids = [...ui.compSel].filter(id => C.compById(db, id));
@@ -2641,8 +3019,8 @@ function compForm(comp, after) {
     fld('Nome', '<input id="f_name" value="' + esc(c.name) + '">', 'w2') + fld('Âmbito', sel('f_amb', C.AMBITOS, c.ambito), 'w2') +
     fld('Início', '<input type="date" id="f_start" value="' + (c.start || '') + '">') + fld('Fim', '<input type="date" id="f_end" value="' + (c.end || '') + '">') +
     fld('País', '<input id="f_country" value="' + esc(c.country) + '">') + fld('Cidade', '<input id="f_city" value="' + esc(c.city) + '">') +
-    fld('Piscina', sel('f_pool', ['P50', 'P25'], c.pool)) + fld('Competição principal (currículos)', sel('f_princ', [['', 'Automático'], ['sim', 'Sim'], ['nao', 'Não']], c.principal || '')) + fld('Notas', '<input id="f_notes" value="' + esc(c.notes || '') + '">', 'w3') + '</div>', () => {
-    const v = { name: C.clean($('#f_name').value), ambito: $('#f_amb').value, start: $('#f_start').value || null, end: $('#f_end').value || $('#f_start').value || null, country: C.clean($('#f_country').value), city: C.clean($('#f_city').value), pool: $('#f_pool').value, principal: $('#f_princ').value, notes: $('#f_notes').value };
+    fld('Piscina', sel('f_pool', ['P50', 'P25'], c.pool)) + fld('Formato de fases', sel('f_fmt', C.FORMATOS, c.formato || 'AB')) + fld('Competição principal (currículos)', sel('f_princ', [['', 'Automático'], ['sim', 'Sim'], ['nao', 'Não']], c.principal || '')) + fld('Notas', '<input id="f_notes" value="' + esc(c.notes || '') + '">', 'w3') + '</div>', () => {
+    const v = { name: C.clean($('#f_name').value), ambito: $('#f_amb').value, start: $('#f_start').value || null, end: $('#f_end').value || $('#f_start').value || null, country: C.clean($('#f_country').value), city: C.clean($('#f_city').value), pool: $('#f_pool').value, principal: $('#f_princ').value, formato: $('#f_fmt').value, notes: $('#f_notes').value };
     if (!v.name) { toast('Indique o nome.', true); return false; }
     let target = comp;
     if (comp) Object.assign(comp, v); else target = C.newCompetition(db, v);
@@ -2666,8 +3044,9 @@ function viewComp(main, id) {
   const c = C.compById(db, id); if (!c) { main.innerHTML = '<p>Competição não encontrada.</p>'; return; }
   const s = C.compSummary(db, c);
   main.appendChild(h('div', '<div><a href="#competicoes" class="back">← Competições</a><h1>' + esc(c.name) + '</h1><div class="muted">' + esc([c.city, c.country].filter(Boolean).join(', ')) + ' · ' + (D(c.start) || 'sem data') + (c.end && c.end !== c.start ? ' a ' + D(c.end) : '') + ' · ' + (c.pool === 'P25' ? 'Piscina 25 m' : 'Piscina 50 m') + ' · ' + esc(c.ambito) + '</div></div>' +
-    '<div class="btns"><button id="edc">Editar</button><button id="addr" class="pri">Introduzir resultados</button><button id="delc" class="danger">Apagar</button></div>', 'vhead'));
+    '<div class="btns"><button id="edc">Editar</button><button id="dupc">Duplicar edição</button><button id="addr" class="pri">Introduzir resultados</button><button id="delc" class="danger">Apagar</button></div>', 'vhead'));
   $('#edc').onclick = () => compForm(c, () => route());
+  $('#dupc').onclick = () => duplicateDialog(c);
   $('#addr').onclick = () => go('introduzir/' + c.id);
   $('#delc').onclick = () => {
     const n = C.compResults(db, c.id).length;
@@ -2676,7 +3055,7 @@ function viewComp(main, id) {
     db.competitions = db.competitions.filter(x => x.id !== c.id); save('del-comp', c.name); go('competicoes');
   };
   const t = s.total;
-  main.appendChild(h('div', kpi('Nadadores', t.atletas) + kpi('Provas', t.nados, t.provas + ' provas distintas') + kpi('Recordes pessoais', t.rp, P(t.pctRP) + ' das provas distintas') + kpi('% RP médio', P(t.pctMedio) || '—') +
+  main.appendChild(h('div', kpi('Nadadores', t.atletas) + kpi('Provas nadadas', t.nados, t.provas + ' por nadador') + kpi('Recordes pessoais', t.rp, P(t.pctRP) + ' das provas por nadador') + kpi('% RP médio', P(t.pctMedio) || '—') +
     kpi('Medalhas', t.ouro + t.prata + t.bronze, t.ouro + ' · ' + t.prata + ' · ' + t.bronze) + kpi('Finais A / B', t.finalA + ' / ' + t.finalB) + kpi('Recordes Nacionais', t.rnComp), 'kpis'));
   const sec = h('section', '<div class="shead"><h2>Resumo por escalão</h2>' + exportBar('comp') + '</div>');
   const sumRows = s.escaloes.map(e => tr(R.sumRow(e.escalao, e, e).map(esc), '', [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]));
@@ -2757,7 +3136,7 @@ function viewIntroduzir(main, arg) {
     fld('Recorde Nacional', '<label class="chk"><input type="checkbox" id="e_rn"' + (editing && editing.rn ? ' checked' : '') + '> registar RN</label>') +
     '<div class="fld w3 rnonly">' + '<div class="form inner">' + fld('Tipo RN', sel('e_rntype', ['Absoluto', 'Categoria'], 'Absoluto')) + fld('Classe (ex.: 100 Cos Abs F)', '<input id="e_rncls">', 'w2') + fld('Também RN de categoria', '<input id="e_rncls2" placeholder="ex.: 100 Cos Sen F (opcional)">', 'w2') + '</div></div>' +
     '</div><div class="btns"><button id="e_save" class="pri">' + (editing ? 'Gravar alterações' : 'Gravar e próximo (Enter)') + '</button>' + (editing ? '<button id="e_cancel">Cancelar</button>' : '') + '</div>');
-  main.appendChild(form);
+  const det = document.createElement('details'); det.className = 'manual'; det.innerHTML = '<summary>Introdução individual — estafetas e casos especiais</summary>'; if (editing) det.open = true; main.appendChild(det); det.appendChild(form);
   const relToggle = () => { form.classList.toggle('isrel', $('#e_rel').checked); };
   const rnToggle = () => { form.classList.toggle('isrn', $('#e_rn').checked); };
   $('#e_rel').onchange = relToggle; $('#e_rn').onchange = rnToggle; relToggle(); rnToggle();
@@ -2827,32 +3206,29 @@ function viewIntroduzir(main, arg) {
   $('#e_save').onclick = doSave;
   $$('input', form).forEach(i => i.addEventListener('keydown', ev => { if (ev.key === 'Enter' && i.id !== 'e_ath' || (ev.key === 'Enter' && ev.ctrlKey)) { ev.preventDefault(); doSave(); } }));
   $('#e_ath').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); $('#e_ath').dispatchEvent(new Event('change')); $('#e_time').focus(); } });
-  if (!editing) {
-    const last = C.enrich(db, C.compResults(db, comp.id)).slice(-15).reverse();
-    main.appendChild(h('section', '<h2>Últimos resultados desta competição</h2>' + table(['Nadador / Equipa', 'Esc.', 'Prova', 'Fase', 'Lugar', 'Tempo', 'RP', '% RP', ''], last.map(r => tr([esc(R.athName(db, r)), esc(r.escalao), esc(r.event), esc(r.phase), esc(C.placeLabel(r)), r.time ? T(r.time) : esc(r.status), T(r.rp), P(r.pct), '<a href="#introduzir/' + comp.id + '/' + r.id + '">editar</a>']))) + '<p><a href="#comp/' + comp.id + '">Ver resumo da competição →</a></p>'));
-    setTimeout(() => $('#e_ath').focus(), 30);
-  }
+  if (editing) setTimeout(() => $('#e_time') && $('#e_time').focus(), 30);
 }
 
 /* ---------- Nadadores ---------- */
 function viewNadadores(main) {
   const top = h('div', '<h1>Nadadores</h1>', 'vhead'); top.appendChild(periodControls(route)); main.appendChild(top);
   dashNadadores(main);
-  main.appendChild(h('div', '<input id="q" placeholder="Procurar nadador ou clube…"><select id="fs"><option value="">Ambos os sexos</option><option value="F">Feminino</option><option value="M">Masculino</option></select><button id="newa" class="pri">Novo nadador</button><button id="mergea">Fundir selecionados</button>', 'toolbar'));
+  main.appendChild(h('div', '<input id="q" placeholder="Procurar nadador ou clube…"><select id="fs"><option value="">Ambos os sexos</option><option value="F">Feminino</option><option value="M">Masculino</option></select><select id="fe"><option value="">Todos os escalões</option>' + C.ESCALOES.map(e => '<option>' + e + '</option>').join('') + '</select><select id="fc"><option value="">Todos os clubes</option>' + [...new Set(db.athletes.map(a => a.club).filter(Boolean))].sort().map(c => '<option>' + esc(c) + '</option>').join('') + '</select><button id="newa" class="pri">Novo nadador</button><button id="mergea">Fundir selecionados</button>', 'toolbar'));
   const list = h('div', ''); main.appendChild(list);
   const sm = db.meta.seasonStartMonth;
   const stats = db.athletes.map(a => { const rs = C.athleteResults(db, a.id).filter(r => C.inPeriod(r.date, ui.mode, ui.period, sm)); const ind = rs.filter(r => r.athleteId === a.id); const s = C.summarize(db, ind);
     const last = rs.map(r => r.date).filter(Boolean).sort().pop(); const rn = db.records.filter(x => x.athleteIds.includes(a.id) && C.inPeriod(x.date, ui.mode, ui.period, sm)).length;
-    return { a, s, n: rs.length, comps: new Set(rs.map(r => r.compId)).size, last, rn }; });
+    return { a, s, n: rs.length, comps: new Set(rs.map(r => r.compId)).size, last, rn, esc: new Set(rs.map(r => r.escalao)) }; });
   const draw = () => {
-    const q = C.norm($('#q').value), fs = $('#fs').value;
-    const rows = stats.filter(x => (ui.period === '*' || x.n || x.rn) && (!q || C.norm(x.a.name + ' ' + (x.a.club || '') + ' ' + (x.a.aliases || []).join(' ')).includes(q)) && (!fs || x.a.sex === fs))
+    const q = C.norm($('#q').value), fs = $('#fs').value, fe = $('#fe').value, fc = $('#fc').value;
+    const rows = stats.filter(x => (ui.period === '*' || x.n || x.rn) && (!q || C.norm(x.a.name + ' ' + (x.a.club || '') + ' ' + (x.a.aliases || []).join(' ')).includes(q)) && (!fs || x.a.sex === fs) && (!fe || x.esc.has(fe)) && (!fc || x.a.club === fc))
       .sort((x, y) => y.comps - x.comps || x.a.name.localeCompare(y.a.name));
     list.innerHTML = '<p class="muted">' + rows.length + ' nadadores</p>' + table(['', 'Nadador', 'Sexo', 'Clube', 'Comp.', 'Provas', 'RP', 'Medalhas', 'Final A', 'RN', 'Última competição'], rows.map(x => tr([
       '<input type="checkbox" data-sel="' + x.a.id + '"' + (ui.athSel.has(x.a.id) ? ' checked' : '') + '>', '<a href="#nadador/' + x.a.id + '">' + esc(x.a.name) + '</a>', x.a.sex || '<span class="warn">?</span>', esc(x.a.club || ''), x.comps, x.s.nados, x.s.rp, medals(x.s), x.s.finalA, x.rn || '', D(x.last)], '', [4, 5, 6, 8, 9])), { num: [4, 5, 6, 8, 9] });
     $$('[data-sel]', list).forEach(cb => cb.onchange = () => { cb.checked ? ui.athSel.add(cb.dataset.sel) : ui.athSel.delete(cb.dataset.sel); });
   };
-  $('#q').oninput = draw; $('#fs').onchange = draw; draw();
+  $('#q').oninput = draw; $('#fs').onchange = draw; $('#fe').onchange = draw; $('#fc').onchange = draw; draw();
+  list.insertAdjacentHTML('beforebegin', '<div class="toolbar">' + exportBar('nad', 'Exportar quadro de nadadores') + '</div>'); bindExport('nad', () => R.nadadoresReport(db, ui.mode, ui.period));
   $('#newa').onclick = () => athleteForm(null);
   $('#mergea').onclick = () => {
     const ids = [...ui.athSel].filter(id => C.athById(db, id));
@@ -2905,13 +3281,14 @@ function viewNadador(main, id) {
     modal('Fundir ' + a.name + ' com…', fld('Outro registo', sel('m_other', opts, opts[0] && opts[0][0])), () => { const v = $('#m_other').value; setTimeout(() => mergeAthletes([id, v]), 0); }, 'Continuar');
   };
   const ctl = h('div', '<div class="seg"><button data-m="epoca" class="' + (ui.cvMode === 'epoca' ? 'on' : '') + '">Por época</button><button data-m="ano" class="' + (ui.cvMode === 'ano' ? 'on' : '') + '">Por ano civil</button></div>' +
-    '<label>De ' + sel('cv_from', allP, ui.cvFrom, 'início') + '</label><label>até ' + sel('cv_to', allP, ui.cvTo, 'hoje') + '</label>' + exportBar('cv'), 'toolbar cvctl');
+    '<label>De ' + sel('cv_from', allP, ui.cvFrom, 'início') + '</label><label>até ' + sel('cv_to', allP, ui.cvTo, 'hoje') + '</label>' + exportBar('cvs', 'Síntese (1 pág.)') + exportBar('cv', 'Completo'), 'toolbar cvctl');
   main.appendChild(ctl);
   $$('.seg button', ctl).forEach(b => b.onclick = () => { ui.cvMode = b.dataset.m; ui.cvFrom = ''; ui.cvTo = ''; route(); });
   $('#cv_from').onchange = e => { ui.cvFrom = e.target.value; route(); }; $('#cv_to').onchange = e => { ui.cvTo = e.target.value; route(); };
   bindExport('cv', () => R.cvReport(db, C.athleteCV(db, id, ui.cvMode, ui.cvFrom, ui.cvTo)));
+  bindExport('cvs', () => R.cvShortReport(db, C.athleteCV(db, id, ui.cvMode, ui.cvFrom, ui.cvTo)));
   const t = cv.total;
-  main.appendChild(h('div', kpi('Competições', t.competicoes) + kpi('Provas', t.nados, t.provas + ' provas distintas') + kpi('Recordes pessoais', t.rp, P(t.pctRP) + ' das provas distintas') + kpi('Medalhas', t.ouro + t.prata + t.bronze, t.ouro + ' · ' + t.prata + ' · ' + t.bronze) + kpi('Finais A', t.finalA, t.meias + ' meias-finais') + kpi('Recordes Nacionais', t.rnTotal, t.rnSel + ' em Seleção'), 'kpis'));
+  main.appendChild(h('div', kpi('Competições', t.competicoes) + kpi('Provas nadadas', t.nados, t.provas + ' por nadador') + kpi('Recordes pessoais', t.rp, P(t.pctRP) + ' das provas por nadador') + kpi('Medalhas', t.ouro + t.prata + t.bronze, t.ouro + ' · ' + t.prata + ' · ' + t.bronze) + kpi('Finais A', t.finalA, t.meias + ' meias-finais') + kpi('Recordes Nacionais', t.rnTotal, t.rnSel + ' em Seleção'), 'kpis'));
   const hl = h('section', '<h2>Principais resultados — Jogos, Mundiais e Europeus</h2>', 'highlight');
   if (cv.main.length) {
     const groups = []; for (const m of cv.main) { let g = groups.find(x => x.comp.id === m.comp.id); if (!g) groups.push(g = { comp: m.comp, tier: m.tier, date: m.date, rows: [] }); g.rows.push(m); }
@@ -2947,8 +3324,12 @@ function viewRecordes(main) {
   const ev = h('section', '<div class="shead"><h2>Evolução por ' + (ui.mode === 'ano' ? 'ano civil' : 'época') + '</h2>' + exportBar('rec') + '</div>' + table([ui.mode === 'ano' ? 'Ano' : 'Época', 'Total', 'Absolutos', 'Categoria', 'Seleção Nacional', 'Clube', 'Sel. Territorial', 'P50', 'P25'],
     rs.evolution.map(e => tr([e.period, '<b>' + e.total + '</b>', e.absoluto, e.categoria, e.selecao, e.clube, e.territorial, e.p50, e.p25], '', [1, 2, 3, 4, 5, 6, 7, 8])), { num: [1, 2, 3, 4, 5, 6, 7, 8] }));
   main.appendChild(ev); bindExport('rec', () => R.recordsReport(db, ui.mode, ui.period));
-  const lst = h('section', '<div class="shead"><h2>Lista (' + rs.recs.length + ')</h2><div class="toolbar"><input id="rq" placeholder="Filtrar…">' + sel('rquem', C.RN_QUEM, '', 'Todos os contextos') + sel('rtype', ['Absoluto', 'Categoria'], '', 'Todos os tipos') + '<button id="addrec" class="pri">Novo recorde</button></div></div><div id="rlist"></div>');
-  main.appendChild(lst);
+  main.appendChild(h('div', '<label class="filebtn">Importar tabela de recordes em vigor (Excel)<input type="file" id="cr_imp" accept=".xlsx"></label><button id="rn_rev">Possíveis RN por confirmar (' + C.rnPending(db).length + ')</button><span class="muted">' + ((db.currentRecords || []).length ? (db.currentRecords.length + ' recordes em vigor carregados') : 'Sem tabela em vigor: a deteção de possíveis RN usa o histórico de recordes') + '</span>', 'toolbar'));
+  $('#rn_rev').onclick = () => rnReview();
+  $('#cr_imp').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const list = await importCurrentRecords(f); if (!list.length) throw new Error('Não encontrei colunas de prova e tempo.'); db.currentRecords = list; save('current-records', f.name); toast(list.length + ' recordes em vigor carregados.'); route(); } catch (err) { toast(err.message, true); } };
+  const lst = h('details', '', 'reclist'); lst.innerHTML = '<summary>Lista de recordes (' + rs.recs.length + ')</summary>';
+  const lst0 = h('section', '<div class="shead"><h2>Lista (' + rs.recs.length + ')</h2><div class="toolbar"><input id="rq" placeholder="Filtrar…">' + sel('rquem', C.RN_QUEM, '', 'Todos os contextos') + sel('rtype', ['Absoluto', 'Categoria'], '', 'Todos os tipos') + '<button id="addrec" class="pri">Novo recorde</button></div></div><div id="rlist"></div>');
+  lst.appendChild(lst0); main.appendChild(lst);
   const draw = () => {
     const q = C.norm($('#rq').value), qq = $('#rquem').value, ty = $('#rtype').value;
     $('#rlist').innerHTML = table(['Data', 'Prova / Classe', 'Titular', 'Tempo', 'Clube', 'Local', 'Pisc.', 'Tipo', 'Contexto', 'Competição', ''], rs.recs.slice().reverse().filter(r => (!q || C.norm(r.classe + ' ' + r.holder + ' ' + r.place + ' ' + r.club).includes(q)) && (!qq || r.quem === qq) && (!ty || r.type === ty)).map(r => tr([
@@ -2986,7 +3367,7 @@ function viewImportar(main) {
     '<div class="card"><h3>LENEX (.lxf / .lef)</h3><p class="muted">Ficheiro oficial de resultados (Splash, Omega, Swiss Timing…). Filtra a nação, calcula classificação, n.º de participantes e de países por prova, e associa os nadadores existentes.</p><input type="file" id="f_lx" accept=".lxf,.lef,.xml,.zip"></div>' +
     '<div class="card"><h3>PDF de resultados</h3><p class="muted">Leitura semiautomática do livro de resultados: identifica provas e linhas da nação. Revê e corrige tudo antes de gravar.</p><input type="file" id="f_pdf" accept=".pdf"></div>' +
     '<div class="card"><h3>Excel histórico</h3><p class="muted">Ficheiros no formato "Resultados SN" (folhas Resultados, Resumo Resultados, Recordes Nacionais). Linhas repetidas são ignoradas.</p><input type="file" id="f_xl" accept=".xlsx" multiple></div>' +
-    '<div class="card"><h3>Marcas de referência (RP)</h3><p class="muted">Rankings nacionais em LENEX ou Excel (colunas de nome, prova/distância+estilo, tempo, piscina, data). Servem para sugerir o RP de entrada; só ficam marcas de nadadores já registados.</p><input type="file" id="f_ref" accept=".lxf,.lef,.xml,.xlsx"></div>' +
+    '<div class="card"><h3>Marcas de referência (RP)</h3><p class="muted">Rankings nacionais em LENEX ou Excel (colunas de nome, prova/distância+estilo, tempo, piscina, data). Servem para sugerir o RP de entrada; só ficam marcas de nadadores já registados.</p><input type="file" id="f_ref" accept=".lxf,.lef,.xml,.xlsx"><div class="btns"><button id="fill_rp">Preencher RP em falta (' + db.results.filter(r => r.athleteId && r.time && !r.rp).length + ')</button></div></div>' +
     '</div>'));
   const out = h('section', '', 'impout'); main.appendChild(out);
   $('#f_xl').onchange = async e => {
@@ -2999,7 +3380,8 @@ function viewImportar(main) {
   };
   $('#f_lx').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const meets = await readLenex(f); ui.lenex = { file: f.name, meets, mi: 0, nation: db.meta.nation || 'POR' }; lenexReview(out); } catch (err) { console.error(err); out.innerHTML = '<div class="err-box">' + esc(err.message) + '</div>'; } };
   $('#f_pdf').onchange = async e => { const f = e.target.files[0]; if (!f) return; out.innerHTML = '<p>A ler o PDF…</p>'; try { const lines = await readPdfLines(f); const rows = C.parsePdfLines(lines, db.meta.nation || 'POR'); ui.pdf = { file: f.name, lines, rows }; pdfReview(out); } catch (err) { console.error(err); out.innerHTML = '<div class="err-box">' + esc(err.message) + '</div>'; } };
-  $('#f_ref').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const n = await importRefMarks(f); save('import-ref', f.name); out.innerHTML = '<div class="ok-box">' + n.added + ' marcas de referência importadas (' + n.skipped + ' de nadadores não registados ignoradas).</div>'; } catch (err) { console.error(err); out.innerHTML = '<div class="err-box">' + esc(err.message) + '</div>'; } };
+  $('#fill_rp').onclick = () => { const n = C.fillMissingRP(db); save('fill-rp', n); toast(n ? n + ' RP preenchido(s).' : 'Sem marcas de referência anteriores para estes resultados.', !n); route(); };
+  $('#f_ref').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const n = await importRefMarks(f); const fr = C.fillMissingRP(db); save('import-ref', f.name); out.innerHTML = '<div class="ok-box">' + n.added + ' marcas de referência importadas (' + n.skipped + ' de nadadores não registados ignoradas). ' + fr + ' RP em falta preenchidos.</div>'; } catch (err) { console.error(err); out.innerHTML = '<div class="err-box">' + esc(err.message) + '</div>'; } };
 }
 async function readLenex(f) {
   const buf = await f.arrayBuffer(); let xml;
@@ -3158,6 +3540,7 @@ function viewBackup(main) {
   main.appendChild(h('div', '<h1>Backup e definições</h1>', 'vhead'));
   const lb = db.meta.lastBackup;
   main.appendChild(h('section', '<div class="grid2">' +
+    '<div class="card"><h3>Backup automático — Google Drive</h3><p class="muted">Escolha a pasta <b>REGISTOS RESULTADOS FPN</b> dentro da unidade do Google Drive no computador (Google Drive para computador). A partir daí a ferramenta grava um ficheiro por dia nessa pasta, atualizado no máximo a cada 10 minutos de trabalho, e mantém os últimos 60 dias.</p><p>' + (db.meta.autoBackupFolder ? 'Pasta: <b>' + esc(db.meta.autoBackupFolder) + '</b>' + (db.meta.lastAutoBackup ? ' · último backup automático: ' + new Date(db.meta.lastAutoBackup).toLocaleString('pt-PT') : '') : '<span class="warn">Ainda não configurado.</span>') + '</p><div class="btns"><button id="bk_dir" class="pri">' + (db.meta.autoBackupFolder ? 'Alterar pasta' : 'Escolher pasta') + '</button>' + (db.meta.autoBackupFolder ? '<button id="bk_now">Fazer backup agora</button>' : '') + '</div></div>' +
     '<div class="card"><h3>Backup completo</h3><p class="muted">Um ficheiro JSON com toda a informação (incluindo o estacionário). Guarde-o no OneDrive/Drive. Último: <b>' + (lb ? new Date(lb).toLocaleString('pt-PT') : 'nunca') + '</b></p><div class="btns"><button id="bk_json" class="pri">Descarregar backup (.json)</button><button id="bk_xl">Base completa em Excel</button></div></div>' +
     '<div class="card"><h3>Restaurar</h3><p class="muted">Substitui todos os dados atuais pelo conteúdo do backup. Faça antes um backup do estado atual.</p><input type="file" id="bk_in" accept=".json"></div>' +
     '<div class="card"><h3>Exportar no formato das folhas originais</h3><p class="muted">Resultados, Resumo Resultados e Recordes Nacionais, com as mesmas colunas do ficheiro "Resultados SN", para o período escolhido.</p><div id="bk_per"></div><div class="btns"><button id="bk_legacy">Descarregar Excel</button></div></div>' +
@@ -3167,6 +3550,8 @@ function viewBackup(main) {
     '<div class="card danger-zone"><h3>Zona de perigo</h3><div class="btns"><button id="bk_seed">Repor dados iniciais (2025–2026)</button><button id="bk_wipe" class="danger">Apagar tudo</button></div></div>' +
     '</div>'));
   const pc = periodControls(() => { route(); }); $('#bk_per').appendChild(pc);
+  $('#bk_dir').onclick = () => bkChoose();
+  if ($('#bk_now')) $('#bk_now').onclick = async () => { await bkRun(true); toast('Backup gravado na pasta.'); route(); };
   $('#bk_json').onclick = async () => {
     const payload = { app: 'FPN-Resultados-Internacionais', exported: new Date().toISOString(), db, letterhead };
     download(new Blob([JSON.stringify(payload)], { type: 'application/json' }), 'FPN_Resultados_Internacionais_backup_' + stamp() + '.json');
@@ -3439,44 +3824,279 @@ function viewConv(main, id) {
   render();
 }
 
-/* Folha rápida a partir da convocatória */
+/* Folha rápida — organizada por prova (como o livro de resultados) */
 function quickSheet(main, comp) {
-  const convs = C.convOfComp(db, comp.id); if (!convs.length) return;
+  const firstPhase = comp.formato === 'TF' ? 'Final Direta' : 'Eliminatória';
   const rows = [];
-  for (const v of convs) for (const sw of C.convSwimmers(v)) {
-    const evs = (sw.events || []).length ? sw.events : [{ date: comp.start, event: '' }];
-    for (const e of evs) rows.push({ athleteId: sw.athleteId, name: sw.name, sex: sw.sex, escalao: sw.group.escalao, event: e.event, date: e.date || comp.start, phase: 'Eliminatória' });
+  const key = r => (r.athleteId || C.norm(r.team || r.name)) + '|' + r.event + '|' + r.phase;
+  const have = new Set();
+  for (const r of C.compResults(db, comp.id)) {
+    const row = { id: r.id, athleteId: r.athleteId, team: r.team, name: r.athleteId ? (C.athById(db, r.athleteId) || {}).name : r.team, sex: r.sex, escalao: r.escalao, event: r.event, phase: r.phase, date: r.date, time: r.time ? T(r.time) : (r.status || ''), place: r.place || r.placeText || '', n: r.participants || '', nc: r.countries || '', rp: r.rp, obs: r.obs || '', orig: true };
+    rows.push(row); have.add(key(row));
   }
-  const sec = h('section', '<div class="shead"><h2>Folha rápida — convocatória (' + rows.length + ' linhas)</h2><span class="muted">Preencha o tempo (ex.: 10650) e grave. Use "+ fase" para acrescentar meia-final ou final.</span></div><div id="qs"></div><div class="btns"><button id="qs_save" class="pri">Gravar linhas preenchidas</button></div>', 'qsheet');
-  main.appendChild(sec);
+  for (const v of C.convOfComp(db, comp.id)) for (const sw of C.convSwimmers(v)) for (const e of sw.events || []) {
+    const row = { athleteId: sw.athleteId, name: (C.athById(db, sw.athleteId) || {}).name || sw.name, sex: sw.sex, escalao: sw.group.escalao, event: e.event, phase: firstPhase, date: e.date || comp.start, time: '', place: '', n: '', nc: '', obs: '' };
+    if (!have.has(key(row)) && !rows.some(x => x.athleteId === row.athleteId && x.event === row.event)) { rows.push(row); have.add(key(row)); }
+  }
+  const convNoEv = C.convOfComp(db, comp.id).flatMap(v => C.convSwimmers(v)).filter(sw => !(sw.events || []).length);
+  const gKey = r => (r.date || '') + '|' + r.event + '|' + (r.sex || '') + '|' + r.phase;
+  const table0 = C.currentRecordTable(db);
+  const sec = h('section', '', 'qsheet'); main.appendChild(sec);
   const draw = () => {
-    $('#qs').innerHTML = '<div class="tw"><table class="t compact qst"><thead><tr><th>Nadador</th><th>Esc.</th><th>Prova</th><th>Fase</th><th>Data</th><th>Tempo</th><th>Lugar</th><th>N.º Atl.</th><th>Países</th><th>RP</th><th>Obs.</th><th></th></tr></thead><tbody>' +
-      rows.map((r, i) => {
-        const done = db.results.find(x => x.compId === comp.id && x.athleteId === r.athleteId && x.event === r.event && x.phase === r.phase);
-        const rp = r.athleteId && r.event ? (db.results.find(x => x.compId === comp.id && x.athleteId === r.athleteId && x.event === r.event && x.rp) || {}).rp || C.lookupRP(db, r.athleteId, r.event, comp.pool, comp.start) : null;
-        return '<tr data-i="' + i + '"' + (done ? ' class="done"' : '') + '><td>' + esc(r.name) + '</td><td>' + esc(r.escalao) + '</td><td><select class="q_ev"><option value="">—</option>' + C.EVENTS.map(e => '<option' + (e === r.event ? ' selected' : '') + '>' + e + '</option>').join('') + '</select></td>' +
-          '<td><select class="q_ph">' + C.PHASES.map(p => '<option' + (p === r.phase ? ' selected' : '') + '>' + p + '</option>').join('') + '</select></td><td><input type="date" class="q_date" value="' + (r.date || '') + '"></td>' +
-          '<td><input class="q_time s" value="' + (done ? (done.time ? T(done.time) : done.status) : (r.time || '')) + '"' + (done ? ' disabled title="Já gravado"' : '') + '></td><td><input class="q_place xs" value="' + (r.place || '') + '"></td><td><input class="q_n xs" value="' + (r.n || '') + '"></td><td><input class="q_nc xs" value="' + (r.nc || '') + '"></td>' +
-          '<td><input class="q_rp s" value="' + (r.rp ? T(r.rp) : rp ? T(rp) : '') + '"></td><td><input class="q_obs" value="' + esc(r.obs || '') + '"></td><td><button class="lnk" data-dup="' + i + '">+ fase</button></td></tr>';
-      }).join('') + '</tbody></table></div>';
-    $$('[data-dup]', sec).forEach(b => b.onclick = () => { read(); const i = +b.dataset.dup; const r = Object.assign({}, rows[i], { phase: rows[i].phase === 'Eliminatória' ? 'Final A' : 'Final A', time: '', place: '' }); rows.splice(i + 1, 0, r); draw(); });
+    const groups = new Map();
+    rows.forEach((r, i) => { const k = gKey(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); });
+    const order = [...groups.keys()].sort((a, b) => { const [da, ea, sa, pa] = a.split('|'), [db2, eb, sb, pb] = b.split('|'); return da.localeCompare(db2) || C.eventSort(ea, eb) || sa.localeCompare(sb) || C.PHASES.indexOf(pa) - C.PHASES.indexOf(pb); });
+    const filled = rows.filter(r => r.time).length;
+    sec.innerHTML = '<div class="shead"><h2>Folha rápida — ' + rows.length + ' linhas (' + filled + ' com tempo)</h2><div class="btns"><button id="qs_addev">+ prova</button><button id="qs_pool" class="' + (db.meta.poolMode ? 'gold' : '') + '">Modo piscina ' + (db.meta.poolMode ? 'ligado' : 'desligado') + '</button><button id="qs_save2" class="pri">Gravar</button></div></div>' +
+      '<p class="muted qhelp">Tempo: 10650 = 1:06,50 · Enter passa à linha seguinte · ao escrever o lugar numa eliminatória cria-se a linha da fase seguinte (formato: ' + esc((C.FORMATOS.find(f => f[0] === (comp.formato || 'AB')) || [])[1]) + ') · "Colar" aceita blocos copiados do Excel ou do PDF.</p>' +
+      (convNoEv.length ? '<p class="warn">' + convNoEv.length + ' convocado(s) sem provas previstas: use "+ linha" na prova respetiva ou indique as provas na convocatória.</p>' : '') +
+      (rows.length ? '' : '<p class="muted">Sem linhas. Use "+ prova" para começar, ou associe uma convocatória com provas previstas.</p>') +
+      order.map(k => {
+        const idx = groups.get(k); const [d, ev, sx, ph] = k.split('|');
+        const n0 = Math.max(0, ...idx.map(i => +rows[i].n || 0)) || '', nc0 = Math.max(0, ...idx.map(i => +rows[i].nc || 0)) || '';
+        return '<div class="qgroup" data-k="' + esc(k) + '"><div class="qgh"><b>' + esc(ev) + '</b> <span class="tag">' + (sx === 'F' ? 'Fem.' : sx === 'M' ? 'Masc.' : sx === 'X' ? 'Misto' : '') + '</span> <span class="ph">' + esc(ph) + '</span> <span class="muted">' + D(d) + '</span>' +
+          '<span class="qgn">N.º atl. <input class="g_n xs" inputmode="numeric" value="' + n0 + '"> Países <input class="g_nc xs" inputmode="numeric" value="' + nc0 + '"></span><button class="lnk" data-paste="' + esc(k) + '">Colar</button> <button class="lnk" data-addrow="' + esc(k) + '">+ linha</button></div>' +
+          '<div class="tw"><table class="t compact qst"><tbody>' + idx.map(i => { const r = rows[i];
+            const cand = r.athleteId && C.parseTime(r.time) ? C.rnCandidates(db, { compId: comp.id, athleteId: r.athleteId, event: r.event, time: C.parseTime(r.time), date: r.date, escalao: r.escalao, sex: r.sex, phase: r.phase }, table0) : [];
+            const pct = r.rp && C.parseTime(r.time) ? r.rp / C.parseTime(r.time) : null;
+            return '<tr data-i="' + i + '" class="' + (r.orig ? 'done' : '') + '"><td class="nm">' + (r.athleteId ? esc(r.name) : '<input class="q_name" list="dl_athq" value="' + esc(r.name || '') + '" placeholder="Nadador / equipa">') + ' <small class="muted">' + esc(r.escalao || '') + '</small></td>' +
+              '<td><input class="q_time" inputmode="decimal" autocomplete="off" value="' + esc(r.time || '') + '" placeholder="tempo"></td><td><input class="q_place xs" inputmode="numeric" value="' + esc(r.place || '') + '" placeholder="lugar"></td>' +
+              '<td class="rpc">' + (r.rp ? 'RP ' + T(r.rp) : '<span class="muted">sem RP</span>') + (pct ? ' <b class="' + (pct >= 1 ? 'pos' : pct < 0.98 ? 'neg' : '') + '">' + P(pct) + '</b>' : '') + '</td>' +
+              '<td>' + (cand.length ? '<span class="tag rn" title="' + esc(cand.map(c => c.category + (c.age ? ' ' + c.age : '') + ': ' + T(c.time)).join(' · ')) + '">possível RN</span>' : '') + '</td>' +
+              '<td><input class="q_obs" value="' + esc(r.obs || '') + '" placeholder="obs."></td><td><button class="lnk" data-dup="' + i + '">+ fase</button>' + (r.orig ? '' : ' <button class="lnk danger" data-rm="' + i + '">×</button>') + '</td></tr>'; }).join('') + '</tbody></table></div></div>';
+      }).join('') + '<datalist id="dl_athq">' + db.athletes.map(a => '<option value="' + esc(a.name) + '">').join('') + '</datalist>';
+    bindQ();
   };
-  const read = () => $$('.qst tbody tr').forEach(trEl => { const r = rows[+trEl.dataset.i]; r.event = $('.q_ev', trEl).value; r.phase = $('.q_ph', trEl).value; r.date = $('.q_date', trEl).value; if (!$('.q_time', trEl).disabled) r.time = $('.q_time', trEl).value.trim(); r.place = $('.q_place', trEl).value.trim(); r.n = $('.q_n', trEl).value.trim(); r.nc = $('.q_nc', trEl).value.trim(); r.rp = C.parseTime($('.q_rp', trEl).value); r.obs = $('.q_obs', trEl).value.trim(); });
-  draw();
-  $('#qs_save').onclick = () => {
-    read(); let n = 0;
-    const existing = new Set(db.results.map(C.resultKey));
+  const read = () => {
+    $$('.qgroup', sec).forEach(g => {
+      const n = $('.g_n', g).value.trim(), nc = $('.g_nc', g).value.trim();
+      $$('tbody tr', g).forEach(trEl => { const r = rows[+trEl.dataset.i]; r.time = $('.q_time', trEl).value.trim(); r.place = $('.q_place', trEl).value.trim(); r.obs = $('.q_obs', trEl).value.trim(); r.n = n; r.nc = nc;
+        const qn = $('.q_name', trEl); if (qn) { r.name = C.clean(qn.value); const f = C.findAthlete(db, r.name); r.athleteId = f.athlete ? f.athlete.id : null; if (f.athlete) { r.name = f.athlete.name; r.sex = r.sex || f.athlete.sex; } } });
+    });
+  };
+  const ensureNext = (i) => {
+    const r = rows[i]; const nx = C.nextPhase(comp, r.event, r.phase, C.parsePlace(r.place).place);
+    if (!nx || rows.some(x => x !== r && (x.athleteId ? x.athleteId === r.athleteId : x.name === r.name) && x.event === r.event && x.phase === nx)) return false;
+    rows.push({ athleteId: r.athleteId, name: r.name, team: r.team, sex: r.sex, escalao: r.escalao, event: r.event, phase: nx, date: r.date, time: '', place: '', n: '', nc: '', obs: '', rp: r.rp });
+    return true;
+  };
+  const bindQ = () => {
+    const times = $$('.q_time', sec);
+    times.forEach((inp, k) => {
+      inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); const t = C.parseTime(inp.value); if (t) inp.value = T(t); const nxt = $('.q_place', inp.closest('tr')); (ev.shiftKey ? times[k - 1] : nxt || times[k + 1]) && (ev.shiftKey ? times[k - 1] : nxt).focus(); } });
+      inp.addEventListener('blur', () => { const t = C.parseTime(inp.value); if (t) inp.value = T(t); });
+    });
+    $$('.q_place', sec).forEach(inp => {
+      inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); const all = $$('.q_time', sec); const tr0 = inp.closest('tr'); const i = all.indexOf($('.q_time', tr0)); inp.dispatchEvent(new Event('change')); setTimeout(() => { const a2 = $$('.q_time', sec); const target = a2.find(x => +x.closest('tr').dataset.i === +tr0.dataset.i); const j = a2.indexOf(target); if (a2[j + 1]) a2[j + 1].focus(); }, 30); } });
+      inp.addEventListener('change', () => { read(); const i = +inp.closest('tr').dataset.i; if (ensureNext(i)) { const sy = window.scrollY; draw(); window.scrollTo(0, sy); } });
+    });
+    $$('.q_obs', sec).forEach(inp => inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); const all = $$('.q_time', sec); const j = all.indexOf($('.q_time', inp.closest('tr'))); if (all[j + 1]) all[j + 1].focus(); } }));
+    $$('[data-dup]', sec).forEach(b => b.onclick = () => { read(); const r = rows[+b.dataset.dup]; const ph = C.nextPhase(comp, r.event, r.phase, 1) || 'Final A'; rows.push(Object.assign({}, r, { id: undefined, orig: false, phase: ph, time: '', place: '', obs: '' })); draw(); });
+    $$('[data-rm]', sec).forEach(b => b.onclick = () => { read(); rows.splice(+b.dataset.rm, 1); draw(); });
+    $$('[data-addrow]', sec).forEach(b => b.onclick = () => { read(); const [d, ev, sx, ph] = b.dataset.addrow.split('|'); rows.push({ athleteId: null, name: '', sex: sx, escalao: 'Sénior', event: ev, phase: ph, date: d, time: '', place: '', n: '', nc: '', obs: '' }); draw(); const q = $$('.q_name', sec); if (q.length) q[q.length - 1].focus(); });
+    $$('[data-paste]', sec).forEach(b => b.onclick = () => pasteInto(b.dataset.paste));
+    $('#qs_addev').onclick = () => {
+      read();
+      modal('Acrescentar prova à folha', '<div class="form">' + fld('Prova', sel('a_ev', C.EVENTS, '100 Livres')) + fld('Sexo', sel('a_sx', [['F', 'Feminino'], ['M', 'Masculino'], ['X', 'Misto']], 'F')) + fld('Fase', sel('a_ph', C.PHASES, firstPhase)) + fld('Data', '<input type="date" id="a_d" value="' + (comp.start || '') + '">') +
+        fld('Nadadores (um por linha; os convocados aparecem como sugestão)', '<textarea id="a_names" rows="5" placeholder="Francisca Soares Martins&#10;Camila Rodrigues Rebelo"></textarea>', 'w3') + '</div>', () => {
+        const ev = $('#a_ev').value, sx = $('#a_sx').value, ph = $('#a_ph').value, d = $('#a_d').value || comp.start;
+        const names = $('#a_names').value.split('\n').map(C.clean).filter(Boolean);
+        if (!names.length) names.push('');
+        for (const nm of names) { const f = nm ? C.findAthlete(db, nm) : {}; const a = f.athlete; const sw = a ? C.convOfComp(db, comp.id).flatMap(v => C.convSwimmers(v)).find(x => x.athleteId === a.id) : null;
+          rows.push({ athleteId: a ? a.id : null, name: a ? a.name : nm, sex: sx, escalao: sw ? sw.group.escalao : (a && rows.find(r => r.athleteId === a.id) || {}).escalao || 'Sénior', event: ev, phase: ph, date: d, time: '', place: '', n: '', nc: '', obs: '' }); }
+        setTimeout(draw, 0);
+      }, 'Acrescentar');
+      const conv = C.convOfComp(db, comp.id).flatMap(v => C.convSwimmers(v));
+      if (conv.length) $('#a_names').insertAdjacentHTML('afterend', '<div class="chips">' + conv.map(sw => '<button type="button" class="chip" data-nm="' + esc((C.athById(db, sw.athleteId) || {}).name || sw.name) + '" data-sx="' + sw.sex + '">' + esc((C.athById(db, sw.athleteId) || {}).name || sw.name) + '</button>').join('') + '</div>');
+      $$('.chip').forEach(c => c.onclick = () => { const ta = $('#a_names'); ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + c.dataset.nm; $('#a_sx').value = c.dataset.sx; c.disabled = true; });
+    };
+    $('#qs_pool').onclick = () => { read(); db.meta.poolMode = !db.meta.poolMode; document.body.classList.toggle('pool', !!db.meta.poolMode); save('pool-mode'); draw(); };
+    $('#qs_save2').onclick = doSave;
+  };
+  const pasteInto = (k) => {
+    read();
+    const idx = rows.map((r, i) => i).filter(i => gKey(rows[i]) === k);
+    modal('Colar resultados — ' + k.split('|')[1] + ' · ' + k.split('|')[3], '<p class="muted">Cole linhas copiadas do Excel ou do PDF (lugar, nome, tempo, por qualquer ordem). As linhas dos nossos nadadores são reconhecidas pelo nome; as restantes contam para o N.º de atletas. Se colar só tempos, são atribuídos pela ordem da folha.</p><textarea id="p_txt" rows="12" style="width:100%"></textarea><label class="chk"><input type="checkbox" id="p_n" checked> usar o n.º de linhas classificadas como N.º de atletas (e as siglas de 3 letras como países)</label>', () => {
+      const lines = $('#p_txt').value.split('\n').map(x => x.replace(/\t/g, ' ').trim()).filter(Boolean);
+      const timeRe = /(\d{1,2}[:.])?\d{1,2}[.,]\d{2}/g;
+      const parsed = lines.map(l => { const ts = (l.match(timeRe) || []).map(C.parseTime).filter(t => t && t > 15); const pl = (l.match(/^(\d{1,3})[.\sº]/) || [])[1]; const nat = (l.match(/\b[A-Z]{3}\b/g) || []).filter(x => !/^(DNS|DSQ|DNF|DQ)$/.test(x)); const st = (l.match(/\b(DNS|DSQ|DNF|DQ)\b/) || [])[1];
+        const nm = C.clean(l.replace(timeRe, ' ').replace(/^\d{1,3}[.\sº]+/, ' ').replace(/\b(19|20)\d{2}\b/g, ' ').replace(/\b[A-Z]{3}\b/g, ' ').replace(/[\d+]+/g, ' ')); return { l, t: ts.length ? ts[0] : null, pl: pl ? +pl : null, nat: nat[nat.length - 1], nm, st }; });
+      const hasNames = parsed.some(p => p.nm.length > 3);
+      let hit = 0;
+      if (hasNames) {
+        for (const i of idx) {
+          const r = rows[i]; if (!r.name) continue;
+          let best = null, bs = 0; for (const p of parsed) { const sc = C.nameScore(p.nm, r.name); if (sc > bs) { bs = sc; best = p; } }
+          if (best && bs >= 0.7) { if (best.t) r.time = T(best.t); else if (best.st) r.time = best.st; if (best.pl) r.place = String(best.pl); hit++; }
+        }
+      } else { parsed.filter(p => p.t).forEach((p, j) => { if (idx[j] != null) { rows[idx[j]].time = T(p.t); if (p.pl) rows[idx[j]].place = String(p.pl); hit++; } }); }
+      if ($('#p_n').checked && hasNames) { const ranked = parsed.filter(p => p.t && p.pl); if (ranked.length) idx.forEach(i => { rows[i].n = String(ranked.length); const ns = new Set(ranked.map(p => p.nat).filter(Boolean)); if (ns.size) rows[i].nc = String(ns.size); }); }
+      for (const i of idx) ensureNext(i);
+      toast(hit + ' linha(s) preenchida(s) a partir do texto colado.');
+      setTimeout(draw, 0);
+    }, 'Aplicar');
+  };
+  const doSave = () => {
+    read(); let n = 0, u = 0;
     for (const r of rows) {
-      if (!r.time || !r.event) continue;
+      if (!r.time) continue;
       const time = C.parseTime(r.time); const pl = C.parsePlace(r.place);
-      const res = { id: C.uid('r'), compId: comp.id, athleteId: r.athleteId, team: '', members: [], sex: r.sex, escalao: r.escalao, event: r.event, olympic: C.isOlympic(r.event), date: r.date || comp.start, phase: r.phase,
-        place: pl.place, placeText: pl.place ? '' : pl.text, participants: C.num(r.n), countries: C.num(r.nc), time, status: time ? '' : r.time.toUpperCase(), rp: r.rp, obs: r.obs, rn: false, splits: [], source: 'convocatoria' };
-      const k = C.resultKey(res); if (existing.has(k)) continue; existing.add(k); db.results.push(res); n++; r.time = '';
+      if (!r.athleteId && !r.team && r.name) { const e = C.ensureAthlete(db, r.name, { sex: r.sex === 'X' ? '' : r.sex }); r.athleteId = e.athlete.id; }
+      const fields = { place: pl.place, placeText: pl.place ? '' : pl.text, participants: C.num(r.n), countries: C.num(r.nc), time, status: time ? '' : r.time.toUpperCase(), obs: r.obs };
+      if (r.id) { const ex = db.results.find(x => x.id === r.id); if (ex) { const changed = ex.time !== fields.time || ex.place !== fields.place || (ex.participants || null) !== fields.participants || (ex.countries || null) !== fields.countries || (ex.obs || '') !== fields.obs || ex.status !== fields.status; if (changed) { Object.assign(ex, fields); u++; } } continue; }
+      const sib = r.athleteId ? db.results.find(x => x.compId === comp.id && x.athleteId === r.athleteId && x.event === r.event && x.rp) : null;
+      const rp = r.rp || (sib && sib.rp) || (r.athleteId ? C.lookupRP(db, r.athleteId, r.event, comp.pool, comp.start || r.date) : null);
+      const res = Object.assign({ id: C.uid('r'), compId: comp.id, athleteId: r.athleteId, team: r.athleteId ? '' : (r.team || r.name), members: r.athleteId ? [] : C.matchMembers(db, r.team || r.name || ''), sex: r.sex, escalao: r.escalao, event: r.event, olympic: C.isOlympic(r.event), date: r.date || comp.start, phase: r.phase, rp, rn: false, splits: [], source: 'folha' }, fields);
+      db.results.push(res); r.id = res.id; r.orig = true; r.rp = rp; n++;
     }
-    save('quick-sheet', comp.name + ': ' + n); toast(n + ' resultados gravados.'); route();
+    if (comp.start == null) { const ds = C.compResults(db, comp.id).map(r => r.date).filter(Boolean).sort(); comp.start = ds[0] || null; comp.end = ds[ds.length - 1] || null; }
+    save('folha', comp.name + ': ' + n + ' novos, ' + u + ' alterados'); toast(n + ' resultado(s) novo(s), ' + u + ' alterado(s).');
+    const pend = C.rnPending(db).filter(p => p.result.compId === comp.id);
+    if (pend.length) toast(n + ' novo(s), ' + u + ' alterado(s) · ' + pend.length + ' possível(eis) RN para confirmar no Painel.');
+    const sy = window.scrollY; draw(); window.scrollTo(0, sy);
+  };
+  draw();
+}
+
+/* Possíveis RN: confirmar ou ignorar */
+function rnReview() {
+  const pend = C.rnPending(db);
+  if (!pend.length) return toast('Não há possíveis recordes por confirmar.');
+  const m = modal('Possíveis Recordes Nacionais (' + pend.length + ')', '<p class="muted">Comparação com a tabela de recordes em vigor (Recordes → Importar tabela em vigor) ou, na falta dela, com o melhor recorde registado no histórico.</p>' + table(['Data', 'Nadador', 'Prova', 'Fase', 'Tempo', 'Recorde a bater', ''], pend.map((p, i) => tr([D(p.result.date), esc(R.athName(db, p.result)), esc(p.result.event), esc(p.result.phase), '<b>' + T(p.result.time) + '</b>', p.recs.map(r => esc(r.category + (r.age ? ' ' + r.age : '') + ' ' + T(r.time) + ' (' + (r.holder || '').split(',')[0] + ')')).join('<br>'), '<button class="lnk" data-ok="' + i + '">registar</button> · <button class="lnk danger" data-no="' + i + '">ignorar</button>']))), () => true, 'Fechar');
+  $('.cancel', m).style.display = 'none';
+  $$('[data-ok]', m).forEach(b => b.onclick = () => {
+    const p = pend[+b.dataset.ok]; const r = p.result; const c = C.compById(db, r.compId) || {}; const a = r.athleteId ? C.athById(db, r.athleteId) : null;
+    for (const rec of p.recs) {
+      const cls = r.event.replace(' Livres', ' Liv').replace(' Costas', ' Cos').replace(' Bruços', ' Bru').replace(' Mariposa', ' Mar').replace(' Estilos', ' Est') + ' ' + (rec.category === 'Absoluto' ? 'Abs' : rec.category.slice(0, 3) + (rec.age || '')) + ' ' + (r.sex || '');
+      db.records.push({ id: C.uid('n'), date: r.date, dateEstimated: false, classe: cls.trim(), event: r.event, category: rec.category, age: rec.age || '', sex: r.sex, holder: a ? a.name : r.team, athleteIds: a ? [a.id] : (r.members || []), time: r.time, club: a ? a.club || '' : '', place: c.city || '', pool: c.pool || 'P50', discipline: 'Natação Pura', type: rec.category === 'Absoluto' ? 'Absoluto' : 'Categoria', quem: 'Seleção Nacional', compId: r.compId, resultId: r.id, notes: 'Registado a partir de possível RN' });
+    }
+    r.rn = true; save('rn-confirm', r.event); b.closest('tr').remove(); toast('Recorde registado.');
+  });
+  $$('[data-no]', m).forEach(b => b.onclick = () => { const p = pend[+b.dataset.no]; (db.meta.rnDismissed = db.meta.rnDismissed || []).push(p.result.id); save('rn-dismiss'); b.closest('tr').remove(); });
+}
+
+/* Tabela de recordes em vigor (Excel) */
+async function importCurrentRecords(f) {
+  const wb = new ExcelJS.Workbook(); await wb.xlsx.load(await f.arrayBuffer());
+  const out = [];
+  wb.eachSheet(ws => {
+    const rows = C.sheetRows(ws);
+    for (let i = 0; i < Math.min(12, rows.length); i++) {
+      const hd = rows[i].map(x => C.norm(x)); const ix = k => hd.findIndex(x => k.some(kk => x === kk || x.indexOf(kk) === 0));
+      const iP = ix(['prova classe', 'prova', 'classe']), iT = ix(['tempo', 'marca', 'resultado']), iS = ix(['sexo', 'genero']), iC = ix(['categoria', 'escalao']), iA = ix(['idade']), iPool = ix(['piscina']), iH = ix(['praticante', 'titular', 'nome', 'nadador']), iD = ix(['data']);
+      if (iP < 0 || iT < 0) continue;
+      const poolSheet = /25|curta|pc/i.test(ws.name) ? 'P25' : /50|longa|pl/i.test(ws.name) ? 'P50' : '';
+      for (const r of rows.slice(i + 1)) {
+        if (!r || !r[iP] || !r[iT]) continue;
+        const pc = C.parseRecordClass(String(r[iP]));
+        const cat = iC >= 0 && r[iC] ? (/abs/i.test(r[iC]) ? 'Absoluto' : C.normEscalao(r[iC])) : pc.category || 'Absoluto';
+        const sex = iS >= 0 ? C.normSex(r[iS]) : pc.sex;
+        const time = C.parseTime(r[iT]); if (!time) continue;
+        out.push({ event: pc.event, category: cat, age: iA >= 0 && r[iA] ? String(r[iA]) : pc.age, sex, pool: iPool >= 0 && r[iPool] ? (/25/.test(String(r[iPool])) ? 'P25' : 'P50') : poolSheet || 'P50', time, holder: iH >= 0 ? C.clean(r[iH]) : '', date: iD >= 0 ? C.toISO(r[iD]) : null, type: cat === 'Absoluto' ? 'Absoluto' : 'Categoria' });
+      }
+      break;
+    }
+  });
+  return out;
+}
+
+/* Duplicar para nova edição */
+function duplicateDialog(comp) {
+  const y = d => d ? (+d.slice(0, 4) + 1) + d.slice(4) : '';
+  modal('Duplicar para nova edição', '<p class="muted">Copia âmbito, local, piscina, formato de fases e a convocatória (códigos, staff, logística e notas). Os resultados não são copiados.</p><div class="form">' + fld('Nome da nova edição', '<input id="d_name" value="' + esc(C.bumpEdition(comp.name)) + '">', 'w3') +
+    fld('Início', '<input type="date" id="d_start" value="' + y(comp.start) + '">') + fld('Fim', '<input type="date" id="d_end" value="' + y(comp.end) + '">') + fld('Nadadores', '<label class="chk"><input type="checkbox" id="d_keep"> manter os nadadores convocados</label>') + '</div>', () => {
+    const st = $('#d_start').value; if (!st) { toast('Indique a data de início.', true); return false; }
+    const nc = C.duplicateEdition(db, comp, st, $('#d_end').value || st, { name: C.clean($('#d_name').value), keepSwimmers: $('#d_keep').checked });
+    save('duplicate-comp', nc.name); toast('Nova edição criada.'); go('comp/' + nc.id);
+  }, 'Criar edição');
+}
+
+/* Painel: alertas e metas */
+function alertsBox(main) {
+  const al = C.alerts(db);
+  const sec = h('section', '<div class="shead"><h2>Alertas</h2><span class="muted">' + (al.length ? al.length + ' por tratar' : 'Tudo em dia') + '</span></div>' +
+    (al.length ? '<ul class="alerts">' + al.map((a, i) => '<li class="lv-' + a.lvl + '"><span class="dot"></span><span>' + esc(a.text) + (a.label && a.link ? ' — <a href="#' + a.link + '">' + esc(a.label) + '</a>' : '') + '</span>' + (a.action ? '<button class="lnk" data-act="' + a.action + '">' + esc(a.label) + '</button>' : '') + '</li>').join('') + '</ul>' : '<p class="okc">Sem alertas.</p>'), 'alertbox');
+  main.appendChild(sec);
+  $$('[data-act]', sec).forEach(b => b.onclick = () => {
+    if (b.dataset.act === 'fillrp') { const n = C.fillMissingRP(db); save('fill-rp', n); toast(n ? n + ' RP preenchido(s).' : 'Sem marcas de referência para preencher: importe os rankings nacionais em Importar → Marcas de referência.', !n); route(); }
+    if (b.dataset.act === 'rn') rnReview();
+  });
+}
+function goalsBox(main) {
+  if (!ui.period || ui.period === '*') return;
+  const gs = C.goalStatus(db, ui.mode, ui.period);
+  const sec = h('section', '<div class="shead"><h2>Metas do PAR — ' + esc(R.periodLabel(ui.mode, ui.period)) + '</h2><button id="g_ed">' + (gs ? 'Editar metas' : 'Definir metas') + '</button></div>' +
+    (gs && gs.length ? '<div class="goals">' + gs.map(g => '<div class="goal g-' + g.light + '"><div class="gl">' + esc(g.label) + '</div><div class="gv">' + (g.pct ? P(g.value) : g.value) + ' <small>/ ' + (g.pct ? g.target + '%' : g.target) + '</small></div><div class="gbar"><span style="width:' + Math.min(100, Math.round((g.ratio || 0) * 100)) + '%"></span></div><div class="gp">' + (g.ratio != null ? Math.round(g.ratio * 100) + '%' : '') + '</div></div>').join('') + '</div>' : '<p class="muted">Sem metas definidas para este período.</p>'));
+  main.appendChild(sec);
+  $('#g_ed').onclick = () => {
+    const k = ui.mode + ':' + ui.period; const g = ((db.meta.goals || {})[k]) || {};
+    modal('Metas — ' + R.periodLabel(ui.mode, ui.period), '<div class="form">' + C.GOAL_KEYS.map(([key, label]) => fld(label + (/pct/.test(key) ? ' (%)' : ''), '<input type="number" step="0.1" data-gk="' + key + '" value="' + (g[key] ?? '') + '">')).join('') + '</div>', () => {
+      const o = {}; $$('[data-gk]').forEach(i => { if (i.value !== '') o[i.dataset.gk] = +i.value; });
+      db.meta.goals = db.meta.goals || {}; db.meta.goals[k] = o; save('goals', k); route();
+    });
   };
 }
 
+/* Tabelas: ordenar por coluna e cores do % RP */
+function enhanceTables(root) {
+  $$('table.t', root).forEach(tb => {
+    const ths = $$('thead th', tb);
+    const pctCols = ths.map((th, i) => /% RP/.test(th.textContent) ? i : -1).filter(i => i >= 0);
+    if (pctCols.length) $$('tbody tr', tb).forEach(trEl => pctCols.forEach(i => { const td = trEl.children[i]; if (!td) return; const v = parseFloat(td.textContent.replace(',', '.')); if (isFinite(v) && /%/.test(td.textContent)) td.classList.add(v >= 100 ? 'pos' : v < 98 ? 'neg' : 'mid'); }));
+    ths.forEach((th, i) => {
+      if (!th.textContent.trim() || th.dataset.sortable) return; th.dataset.sortable = '1'; th.classList.add('sortable');
+      th.onclick = () => {
+        const dir = th.dataset.dir === 'asc' ? 'desc' : 'asc'; ths.forEach(x => delete x.dataset.dir); th.dataset.dir = dir;
+        const body = tb.tBodies[0]; const rws = [...body.rows];
+        const val = trEl => { const td = trEl.children[i]; const t = (td ? (td.querySelector('input') ? td.querySelector('input').value : td.textContent) : '').trim();
+          let m = t.match(/^(\d{2})\/(\d{2})\/(\d{4})/); if (m) return m[3] + m[2] + m[1];
+          const tm = C.parseTime(t); if (/^\d{1,2}:\d{2},\d{2}$|^\d{1,2},\d{2}$/.test(t) && tm) return tm;
+          const n = parseFloat(t.replace(/\s/g, '').replace(',', '.')); return isFinite(n) && /^[\d\s.,%€-]+$/.test(t) ? n : t.toLowerCase(); };
+        rws.sort((a, b) => { const x = val(a), y = val(b); const r = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'pt'); return dir === 'asc' ? r : -r; });
+        rws.forEach(r => body.appendChild(r));
+      };
+    });
+  });
+}
+
+/* Backup automático para a pasta do Google Drive (Google Drive para computador) */
+const AUTO_PREFIX = 'FPN_Resultados_Internacionais_';
+let bkDir = null, bkLast = 0, bkBusy = false;
+async function bkInit() { try { bkDir = await IDB.get('bkdir') || null; } catch (e) { bkDir = null; } bkBadge(); }
+async function bkPerm(ask) {
+  if (!bkDir) return false;
+  try { let p = await bkDir.queryPermission({ mode: 'readwrite' }); if (p !== 'granted' && ask) p = await bkDir.requestPermission({ mode: 'readwrite' }); return p === 'granted'; } catch (e) { return false; }
+}
+async function bkChoose() {
+  if (!window.showDirectoryPicker) { toast('Este browser não permite gravar numa pasta. Use o Chrome ou o Edge.', true); return; }
+  try { const d = await window.showDirectoryPicker({ id: 'fpn-backup', mode: 'readwrite' }); bkDir = d; await IDB.set('bkdir', d); db.meta.autoBackupFolder = d.name; save('bk-folder', d.name); await bkRun(true); route(); }
+  catch (e) { if (e.name !== 'AbortError') toast('Não foi possível usar a pasta: ' + e.message, true); }
+}
+async function bkRun(force) {
+  if (!bkDir || bkBusy) return;
+  if (!force && Date.now() - bkLast < 10 * 60000) return;
+  if (!(await bkPerm(!!force))) { bkBadge(); return; }
+  bkBusy = true;
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const fh = await bkDir.getFileHandle(AUTO_PREFIX + day + '.json', { create: true });
+    const w = await fh.createWritable(); await w.write(JSON.stringify({ app: 'FPN-Resultados-Internacionais', exported: new Date().toISOString(), db, letterhead })); await w.close();
+    bkLast = Date.now(); db.meta.lastBackup = new Date().toISOString(); db.meta.lastAutoBackup = db.meta.lastBackup;
+    const names = []; for await (const [n] of bkDir.entries()) if (n.startsWith(AUTO_PREFIX) && n.endsWith('.json')) names.push(n);
+    names.sort(); for (const n of names.slice(0, Math.max(0, names.length - 60))) { try { await bkDir.removeEntry(n); } catch (e) {} }
+    try { await IDB.set('db', JSON.stringify(db)); } catch (e) {}
+  } catch (e) { console.warn('backup automático', e); }
+  bkBusy = false; bkBadge();
+}
+function bkBadge() {
+  const b = $('#bkauto'); if (!b) return;
+  if (!bkDir) { b.style.display = 'none'; return; }
+  b.style.display = '';
+  bkDir.queryPermission({ mode: 'readwrite' }).then(p => {
+    if (p === 'granted') { b.className = 'bk'; b.textContent = 'Backup automático ativo'; b.onclick = () => go('backup'); }
+    else { b.className = 'bk warn'; b.textContent = 'Retomar backup automático'; b.onclick = async () => { await bkRun(true); }; }
+  }).catch(() => {});
+}
 /* ---------- Estágios ---------- */
 function viewEstagios(main) {
   const top = h('div', '<h1>Estágios</h1>', 'vhead'); top.appendChild(periodControls(route)); main.appendChild(top);
@@ -3564,6 +4184,10 @@ async function init() {
   if (!db) { const s = $('#seed'); db = s && s.textContent.trim().length > 10 ? C.migrate(JSON.parse(s.textContent)) : C.emptyDB(); save('init'); }
   if (letterhead && letterhead.v !== 3 && letterhead.docx) { try { letterhead = await LH.parseLetterhead(LH.bytesFromB64(letterhead.docx).buffer); await IDB.set('letterhead', letterhead); } catch (e) { console.warn(e); } }
   if (!letterhead) { const l = $('#lhseed'); if (l && l.textContent.trim().length > 10) { try { const sd = JSON.parse(l.textContent); letterhead = sd.docxOnly ? await LH.parseLetterhead(LH.bytesFromB64(sd.docxOnly).buffer) : sd; letterhead.seedName = sd.name || ''; await IDB.set('letterhead', letterhead); } catch (e) { console.warn(e); } } }
+  ui.period = C.currentPeriod(db, ui.mode);
+  document.body.classList.toggle('pool', !!db.meta.poolMode);
+  await bkInit(); bkRun(false);
+  let tmr = null; new MutationObserver(() => { clearTimeout(tmr); tmr = setTimeout(() => enhanceTables($('#main')), 60); }).observe($('#main'), { childList: true, subtree: true });
   window.addEventListener('hashchange', route);
   route();
 }
