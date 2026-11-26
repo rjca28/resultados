@@ -3604,7 +3604,7 @@ function viewIntroduzir(main, arg) {
 function viewNadadores(main) {
   const top = h('div', '<h1>Nadadores</h1>', 'vhead'); top.appendChild(periodControls(route)); main.appendChild(top);
   dashNadadores(main);
-  main.appendChild(h('div', '<input id="q" placeholder="Procurar nadador ou clube…"><select id="fs"><option value="">Ambos os sexos</option><option value="F">Feminino</option><option value="M">Masculino</option></select><select id="fe"><option value="">Todos os escalões</option>' + C.ESCALOES.map(e => '<option>' + e + '</option>').join('') + '</select><select id="fc"><option value="">Todos os clubes</option>' + [...new Set(db.athletes.map(a => a.club).filter(Boolean))].sort().map(c => '<option>' + esc(c) + '</option>').join('') + '</select><button id="newa" class="pri">Novo nadador</button><button id="mergea">Fundir selecionados</button><button id="bulka">Alterar selecionados…</button><button id="srall" title="Lê os recordes pessoais no SwimRankings de todos os nadadores com ligação">Atualizar RP (SwimRankings)</button><datalist id="dl_clubs">' + [...new Set(db.athletes.map(a => a.club).filter(Boolean))].sort().map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>', 'toolbar'));
+  main.appendChild(h('div', '<input id="q" placeholder="Procurar nadador ou clube…"><select id="fs"><option value="">Ambos os sexos</option><option value="F">Feminino</option><option value="M">Masculino</option></select><select id="fe"><option value="">Todos os escalões</option>' + C.ESCALOES.map(e => '<option>' + e + '</option>').join('') + '</select><select id="fc"><option value="">Todos os clubes</option>' + [...new Set(db.athletes.map(a => a.club).filter(Boolean))].sort().map(c => '<option>' + esc(c) + '</option>').join('') + '</select><button id="newa" class="pri">Novo nadador</button><button id="mergea">Fundir selecionados</button><button id="bulka">Alterar selecionados…</button><button id="srpaste" class="gold" title="Copiar e colar as páginas do SwimRankings, um nadador de cada vez">Colar RP do SwimRankings…</button><button id="srclr" title="Apagar os recordes pessoais carregados do SwimRankings">Limpar RP…</button><button id="srall" title="Lê os recordes pessoais no SwimRankings de todos os nadadores com ligação">Atualizar RP (SwimRankings)</button><datalist id="dl_clubs">' + [...new Set(db.athletes.map(a => a.club).filter(Boolean))].sort().map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>', 'toolbar'));
   const sel = C.selecaoSet(db);
   const nRec = db.athletes.filter(a => !sel.has(a.id)).length;
   if (nRec) main.appendChild(h('label', '<input type="checkbox" id="frec"' + (ui.showRecOnly ? ' checked' : '') + '> Mostrar também ' + nRec + ' recordistas sem participação nas Seleções (titulares de recordes de clube)', 'chk'));
@@ -3627,7 +3627,7 @@ function viewNadadores(main) {
   $('#q').oninput = draw; $('#fs').onchange = draw; $('#fe').onchange = draw; $('#fc').onchange = draw; if ($('#frec')) $('#frec').onchange = () => { ui.showRecOnly = $('#frec').checked; draw(); }; draw();
   list.insertAdjacentHTML('beforebegin', '<div class="toolbar">' + exportBar('nad', 'Relatório de nadadores') + '</div>'); bindExport('nad', () => R.nadadoresReport(db, ui.mode, ui.period, { sexo: $('#fs').value, escalao: $('#fe').value, clube: $('#fc').value, q: $('#q').value.trim() }));
   $('#newa').onclick = () => athleteForm(null);
-  $('#srall').onclick = () => srUpdateAll();
+  $('#srall').onclick = () => srUpdateAll(); $('#srpaste').onclick = () => srPasteBulk(); $('#srclr').onclick = () => srClearDialog();
   $('#bulka').onclick = () => {
     const ids = [...ui.athSel].filter(id => C.athById(db, id)); if (!ids.length) return toast('Selecione nadadores na lista.', true);
     modal('Alterar ' + ids.length + ' nadador(es)', '<p class="muted">Deixe em branco o que não quer alterar.</p><div class="form">' + fld('Sexo', sel('b_sex', [['F', 'Feminino'], ['M', 'Masculino']], '', '— manter —')) + fld('Clube', '<input id="b_club" list="dl_clubs">') + '</div>', () => {
@@ -4447,11 +4447,11 @@ async function srFetch(url) {
       const r = await fetch(SR_PROXIES[i](url), { signal: ctl.signal, cache: 'no-store' }); clearTimeout(t);
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const txt = await r.text(); if (!/swimrankings|athleteBest|athleteSearch|athleteId/i.test(txt)) throw new Error('resposta inválida');
-      if (db.meta.srProxy !== i) db.meta.srProxy = i;
+      if (db.meta.srProxy !== i) db.meta.srProxy = i; db.meta.srOnline = true;
       return txt;
     } catch (e) { last = e; }
   }
-  throw new Error('Sem acesso ao SwimRankings (' + (last && last.message || 'rede') + ')');
+  db.meta.srOnline = false; throw new Error('O SwimRankings não deixou ler a página automaticamente (verificação anti-robôs)');
 }
 const SR_STROKE = { freestyle: 'Livres', free: 'Livres', backstroke: 'Costas', back: 'Costas', breaststroke: 'Bruços', breast: 'Bruços', butterfly: 'Mariposa', fly: 'Mariposa', medley: 'Estilos', 'individual medley': 'Estilos', livres: 'Livres', costas: 'Costas', brucos: 'Bruços', mariposa: 'Mariposa', estilos: 'Estilos' };
 const SR_MON = { jan: 1, feb: 2, fev: 2, mar: 3, apr: 4, abr: 4, may: 5, mai: 5, jun: 6, jul: 7, aug: 8, ago: 8, sep: 9, set: 9, oct: 10, out: 10, nov: 11, dec: 12, dez: 12 };
@@ -4513,24 +4513,77 @@ function srSection(main, a) {
     const pb = a.srPB; const items = (pb && pb.items || []).slice().sort((x, y) => (x.pool === y.pool ? 0 : x.pool === 'P50' ? -1 : 1) || C.eventSort(x.event, y.event));
     const tbl = C.currentRecordTable(db); const age = C.ageAt(a, new Date().toISOString().slice(0, 10));
     const rnOf = it => { let best = null; for (const r of tbl.values()) if (r.list !== 'SEL' && r.category === 'Absoluto' && r.event === it.event && r.pool === it.pool && r.sex === a.sex) best = r; return best; };
-    sec.innerHTML = '<div class="shead"><h2>Recordes pessoais — SwimRankings</h2><div class="toolbar">' + (a.srId ? '<button id="sr_upd">Atualizar</button><a class="btn" target="_blank" href="' + srUrl(a.srId) + '">Abrir no SwimRankings ↗</a><button id="sr_paste" class="lnk">colar página…</button>' : '<button id="sr_find" class="pri">Procurar no SwimRankings</button><button id="sr_link">Indicar link</button>') + '</div></div>' +
+    sec.innerHTML = '<div class="shead"><h2>Recordes pessoais — SwimRankings</h2><div class="toolbar">' + (a.srId ? '<button id="sr_upd">Atualizar</button><a class="btn" target="_blank" href="' + srUrl(a.srId) + '">Abrir no SwimRankings ↗</a><button id="sr_paste" class="lnk">colar página…</button>' : '<button id="sr_find" class="pri">Procurar no SwimRankings</button><button id="sr_link">Indicar link</button><button id="sr_paste" class="lnk">colar página…</button>') + (items.length ? '<button id="sr_clr" class="lnk danger">limpar RP</button>' : '') + '</div></div>' +
       (msg ? '<p class="' + (/^!/.test(msg) ? 'warn' : 'muted') + '">' + esc(msg.replace(/^!/, '')) + '</p>' : '') +
       (!a.srId ? '<p class="warn">Sem ligação ao SwimRankings: os recordes pessoais deste nadador não são atualizados automaticamente.</p>' : '') +
-      (items.length ? '<p class="muted">Lido a ' + D(pb.fetched.slice(0, 10)) + ' ' + pb.fetched.slice(11, 16) + (pb.name ? ' · ' + esc(pb.name) : '') + (pb.info ? ' · ' + esc(pb.info) : '') + '</p>' + table(['Prova', 'Piscina', 'RP', 'Pontos', 'Data', 'Local / competição', 'RN absoluto', '% RN'], items.map(it => { const rn = rnOf(it); return tr([esc(it.event), it.pool, '<b>' + T(it.time) + '</b>', it.points ?? '', D(it.date), esc([it.city, it.meet].filter(Boolean).join(' · ')), rn ? T(rn.time) : '', rn ? (it.time <= rn.time ? flagIcon() + ' RN' : P(rn.time / it.time * 100)) : '']); }), { cls: 'compact', num: [3, 7] }) : (a.srId ? '<p class="muted">Ainda sem leitura.</p>' : ''));
+      (items.length ? '<p class="muted">Lido a ' + D(pb.fetched.slice(0, 10)) + ' ' + pb.fetched.slice(11, 16) + (pb.name ? ' · ' + esc(pb.name) : '') + (pb.info ? ' · ' + esc(pb.info) : '') + '</p>' + table(['Prova', 'Piscina', 'RP', 'Pontos', 'Data', 'Local / competição', 'RN absoluto', '% RN'], items.map(it => { const rn = rnOf(it); return tr([esc(it.event), it.pool, '<b>' + T(it.time) + '</b>', it.points ?? '', D(it.date), esc([it.city, it.meet].filter(Boolean).join(' · ')), rn ? T(rn.time) : '', rn ? (it.time <= rn.time ? flagIcon() + ' RN' : P(rn.time / it.time)) : '']); }), { cls: 'compact', num: [3, 7] }) : (a.srId ? '<p class="muted">Ainda sem leitura.</p>' : ''));
     const up = $('#sr_upd', sec); if (up) up.onclick = () => go1();
     const ps = $('#sr_paste', sec); if (ps) ps.onclick = () => srPasteDialog(a, () => draw('Recordes pessoais atualizados a partir da página colada.'));
     const fd = $('#sr_find', sec); if (fd) fd.onclick = () => srFindDialog(a);
+    const cl = $('#sr_clr', sec); if (cl) cl.onclick = () => { if (!confirm('Limpar os ' + items.length + ' recordes pessoais do SwimRankings de ' + a.name + '? (o link mantém-se)')) return; delete a.srPB; save('sr-clear', a.name); draw('Recordes pessoais do SwimRankings limpos.'); };
     const lk = $('#sr_link', sec); if (lk) lk.onclick = () => { const v = prompt('Cole o link do atleta no SwimRankings:'); const id = srIdFrom(v); if (id) { a.srId = id; save('edit-athlete', a.name + ' · srId'); route(); } else if (v) toast('Link sem athleteId.', true); };
   };
-  const go1 = () => { draw('A ler o SwimRankings…'); srRefresh(a).then(() => draw()).catch(e => draw('!' + e.message + '. Pode abrir a página, copiar tudo (Ctrl+A, Ctrl+C) e usar «colar página…».')); };
+  const go1 = () => { draw('A ler o SwimRankings…'); srRefresh(a).then(() => draw()).catch(e => draw('!' + e.message + '. Abra a página, copie tudo (Ctrl+A, Ctrl+C) e use «colar página…».')); };
   draw();
-  if (a.srId) go1();
+  if (a.srId && db.meta.srOnline) go1();
+}
+/* Colar página do SwimRankings: lê o HTML do clipboard (tabela + athleteId) ou, na falta, o texto */
+function srReadPaste(html, text) {
+  let r = { name: '', info: '', items: [], id: '', birthYear: null };
+  if (html && /athleteBest|athleteId=|swimrankings/i.test(html)) {
+    const p = srParse(html); r = Object.assign(r, p);
+    const ids = {}; (html.match(/athleteId=(\d+)/g) || []).forEach(x => { const k = x.slice(10); ids[k] = (ids[k] || 0) + 1; });
+    r.id = (Object.entries(ids).sort((x, y) => y[1] - x[1])[0] || [])[0] || '';
+  }
+  if (!r.items.length) r.items = srParseText(text || String(html || '').replace(/<[^>]+>/g, '\n'));
+  const src = r.name || String(text || '');
+  const m = src.match(/([A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ' \-]+),\s*([^\n(\t]+?)\s*\(\s*(\d{4})/);
+  if (m) { r.name = C.titleCase ? C.titleCase(m[2].trim()) + ' ' + C.titleCase(m[1].trim()) : m[2].trim() + ' ' + m[1].trim(); r.birthYear = +m[3]; }
+  else if (r.name) r.name = C.reorderName(r.name.replace(/\(.*$/, '').trim());
+  const g = String(text || '').match(/\b(Female|Male|Feminino|Masculino)\b/i); r.sex = g ? (/^f/i.test(g[1]) ? 'F' : 'M') : '';
+  return r;
+}
+function srPasteArea(onRead) {
+  const ta = h('textarea', '', ''); ta.rows = 9; ta.style.width = '100%'; ta.placeholder = 'Clique aqui e cole (Ctrl+V) a página do atleta no SwimRankings';
+  ta.addEventListener('paste', e => { const cd = e.clipboardData; if (!cd) return; const html = cd.getData('text/html'), text = cd.getData('text/plain'); e.preventDefault(); ta.value = text; onRead(srReadPaste(html, text)); });
+  ta.addEventListener('change', () => onRead(srReadPaste('', ta.value)));
+  return ta;
+}
+function srStore(a, r) {
+  a.srPB = { fetched: new Date().toISOString(), name: r.name || '', info: 'copiado da página', items: r.items };
+  if (r.id && !a.srId) a.srId = r.id;
+  if (r.birthYear && !a.birth) a.birth = r.birthYear + '-01-01';
 }
 function srPasteDialog(a, done) {
-  modal('Colar página do SwimRankings — ' + a.name, '<p class="muted">Abra a página do atleta no SwimRankings, selecione tudo (Ctrl+A), copie (Ctrl+C) e cole aqui.</p><textarea id="sr_txt" rows="12" style="width:100%"></textarea>', () => {
-    const items = srParseText($('#sr_txt').value); if (!items.length) { toast('Não encontrei recordes pessoais no texto colado.', true); return false; }
-    a.srPB = { fetched: new Date().toISOString(), name: '', info: 'colado manualmente', items }; save('sr-pb', a.name + ' (colado)'); done && done();
-  }, 'Ler');
+  let last = null;
+  const m = modal('Colar página do SwimRankings — ' + a.name, '<p class="muted">Abra a página do atleta no SwimRankings, carregue em Ctrl+A e Ctrl+C, e cole aqui com Ctrl+V.' + (a.srId ? ' <a target="_blank" href="' + srUrl(a.srId) + '">Abrir a página ↗</a>' : '') + '</p><div id="sr_pa"></div><div id="sr_pr" class="muted"></div>', () => {
+    if (!last || !last.items.length) { toast('Não encontrei recordes pessoais no texto colado.', true); return false; }
+    srStore(a, last); save('sr-pb', a.name + ' (colado)'); done && done();
+  }, 'Gravar');
+  $('#sr_pa', m).appendChild(srPasteArea(r => { last = r; $('#sr_pr', m).innerHTML = r.items.length ? '<b>' + r.items.length + ' recordes pessoais</b> (' + r.items.filter(x => x.pool === 'P50').length + ' PL · ' + r.items.filter(x => x.pool === 'P25').length + ' PC)' + (r.name ? ' · ' + esc(r.name) : '') + (r.name && C.nameScore(r.name, a.name) < 0.85 ? ' <span class="warn">— o nome não parece corresponder a ' + esc(a.name) + '</span>' : '') : '<span class="warn">Sem recordes pessoais reconhecidos.</span>'; }));
+}
+/* Vários nadadores seguidos: cola, confirma o nadador, grava e cola o seguinte */
+function srPasteBulk() {
+  let last = null, n = 0;
+  const opts = db.athletes.slice().sort((x, y) => x.name.localeCompare(y.name)).map(a => '<option value="' + a.id + '">' + esc(a.name) + (a.club ? ' · ' + esc(a.club) : '') + (a.birth ? ' · ' + a.birth.slice(0, 4) : '') + '</option>').join('');
+  const m = modal('Copiar recordes pessoais do SwimRankings', '<p class="muted">Para cada nadador: abra a sua página no SwimRankings, carregue em <b>Ctrl+A</b> e <b>Ctrl+C</b>, volte aqui e cole com <b>Ctrl+V</b>. O programa reconhece o nadador pelo nome e ano de nascimento; confirme e grave. A caixa fica pronta para o seguinte.</p><div id="sb_pa"></div><div id="sb_res" style="margin:8px 0"></div><div class="toolbar"><select id="sb_ath"><option value="">— escolher nadador —</option>' + opts + '</select><button id="sb_new">Criar como novo nadador</button><button id="sb_save" class="pri" disabled>Gravar e colar o seguinte</button></div><div id="sb_log" class="muted"></div>', () => { if (n) route(); }, 'Fechar');
+  $('.cancel', m).style.display = 'none';
+  const ta = srPasteArea(r => {
+    last = r; const sv = $('#sb_save', m);
+    if (!r.items.length) { $('#sb_res', m).innerHTML = '<span class="warn">Não encontrei recordes pessoais no que foi colado. Confirme que copiou a página do atleta (Ctrl+A antes de Ctrl+C).</span>'; sv.disabled = true; return; }
+    let f = r.id ? { athlete: db.athletes.find(a => a.srId === r.id), score: 1 } : { athlete: null };
+    if (!f.athlete && r.name) { f = C.findAthlete(db, r.name, r.sex); if (!f.athlete && f.candidate && f.score >= 0.7) f.athlete = f.candidate; }
+    if (f.athlete && r.birthYear && f.athlete.birth && +f.athlete.birth.slice(0, 4) !== r.birthYear) f.warn = 'ano de nascimento diferente (' + f.athlete.birth.slice(0, 4) + ' na ficha)';
+    $('#sb_ath', m).value = f.athlete ? f.athlete.id : '';
+    $('#sb_res', m).innerHTML = '<b>' + esc(r.name || 'Nome não reconhecido') + '</b>' + (r.birthYear ? ' (' + r.birthYear + ')' : '') + ' · ' + r.items.length + ' recordes pessoais (' + r.items.filter(x => x.pool === 'P50').length + ' PL · ' + r.items.filter(x => x.pool === 'P25').length + ' PC)' + (r.id ? ' · ID ' + r.id : '') +
+      (f.athlete ? ' → <span class="okc">' + esc(f.athlete.name) + '</span>' + (f.score < 0.95 ? ' <span class="warn">(confirme)</span>' : '') + (f.warn ? ' <span class="warn">' + f.warn + '</span>' : '') : ' → <span class="warn">sem correspondência: escolha o nadador ou crie-o</span>');
+    sv.disabled = !f.athlete; if (f.athlete && f.score >= 0.95 && !f.warn) sv.focus();
+  });
+  $('#sb_pa', m).appendChild(ta); ta.focus();
+  $('#sb_ath', m).onchange = e => { $('#sb_save', m).disabled = !e.target.value || !last || !last.items.length; };
+  const store = a => { srStore(a, last); n++; save('sr-pb', a.name + ' (colado)'); $('#sb_log', m).innerHTML = '<span class="okc">✓ ' + esc(a.name) + '</span> · ' + last.items.length + ' RP' + (n > 1 ? ' · ' + n + ' nadadores gravados nesta sessão' : '') ; last = null; ta.value = ''; $('#sb_res', m).innerHTML = ''; $('#sb_save', m).disabled = true; $('#sb_ath', m).value = ''; ta.focus(); };
+  $('#sb_save', m).onclick = () => { const a = C.athById(db, $('#sb_ath', m).value); if (a && last) store(a); };
+  $('#sb_new', m).onclick = () => { if (!last || !last.name) return toast('Cole primeiro a página do atleta.', true); const a = C.ensureAthlete(db, last.name, { sex: last.sex || '', birth: last.birthYear ? last.birthYear + '-01-01' : '' }); store(a); };
 }
 async function srSearch(a) {
   const parts = a.name.split(' '); const last = parts[parts.length - 1], first = parts[0];
@@ -4557,10 +4610,11 @@ function srMissingDialog() {
   const recent = new Set(db.results.filter(r => r.date && C.daysBetween(r.date, today) <= 730).flatMap(r => r.athleteId ? [r.athleteId] : (r.members || [])));
   db.convocatorias.filter(v => v.start && C.daysBetween(v.start, today) <= 730).forEach(v => C.convSwimmers(v).forEach(s => s.athleteId && recent.add(s.athleteId)));
   const list = db.athletes.filter(a => sel.has(a.id) && recent.has(a.id) && !a.srId).sort((x, y) => x.name.localeCompare(y.name));
-  const m = modal('Nadadores sem ligação ao SwimRankings (' + list.length + ')', '<p class="muted">Cole o link de cada atleta (ou use «procurar»). Guarda ao sair de cada campo.</p>' + table(['Nadador', 'Clube', 'Link SwimRankings', ''], list.map(a => tr(['<a href="#nadador/' + a.id + '">' + esc(a.name) + '</a>', esc(a.club || ''), '<input data-srid="' + a.id + '" size="44" placeholder="https://www.swimrankings.net/…athleteId=…">', '<button class="lnk" data-srf="' + a.id + '">procurar</button>']))), () => true, 'Fechar');
+  const m = modal('Nadadores sem ligação ao SwimRankings (' + list.length + ')', '<p class="muted">Cole o link de cada atleta (ou use «procurar»). Guarda ao sair de cada campo. Em alternativa: <button class="lnk" id="srm_paste">copiar e colar as páginas do SwimRankings…</button></p>' + table(['Nadador', 'Clube', 'Link SwimRankings', ''], list.map(a => tr(['<a href="#nadador/' + a.id + '">' + esc(a.name) + '</a>', esc(a.club || ''), '<input data-srid="' + a.id + '" size="44" placeholder="https://www.swimrankings.net/…athleteId=…">', '<button class="lnk" data-srf="' + a.id + '">procurar</button>']))), () => true, 'Fechar');
   $('.cancel', m).style.display = 'none';
   $$('[data-srid]', m).forEach(i => i.onchange = () => { const id = srIdFrom(i.value); if (!id) return toast('Link sem athleteId.', true); const a = C.athById(db, i.dataset.srid); a.srId = id; save('edit-athlete', a.name + ' · srId'); i.closest('tr').style.opacity = .4; toast('Ligado: ' + a.name); });
   $$('[data-srf]', m).forEach(b => b.onclick = () => srFindDialog(C.athById(db, b.dataset.srf)));
+  $('#srm_paste', m).onclick = () => { m.remove(); srPasteBulk(); };
 }
 async function srUpdateAll() {
   const list = db.athletes.filter(a => a.srId); if (!list.length) return toast('Nenhum nadador tem ligação ao SwimRankings.', true);
@@ -4842,6 +4896,20 @@ function viewRecVigor(main) {
   bindExport('rv', () => R.currentRecordsReport(db, crFilter(all, f.mode === 'grelha' ? Object.assign({}, f, { age: '*' }) : f, selSet).sort(crSort), f, { ageLabel: crAgeLabel, lists: CR_LISTS, sex: CR_SEX }));
 }
 
+/* Limpar recordes pessoais do SwimRankings (vários nadadores) */
+function srClearDialog() {
+  const withPB = db.athletes.filter(a => a.srPB && (a.srPB.items || []).length);
+  const selIds = [...ui.athSel].filter(id => C.athById(db, id)); const selPB = selIds.filter(id => withPB.some(a => a.id === id));
+  if (!withPB.length) return toast('Nenhum nadador tem recordes pessoais do SwimRankings carregados.', true);
+  const m = modal('Limpar recordes pessoais do SwimRankings', '<p><label class="chk"><input type="radio" name="clw" value="sel"' + (selPB.length ? ' checked' : ' disabled') + '> Só os nadadores selecionados na lista (' + selPB.length + ')</label><br><label class="chk"><input type="radio" name="clw" value="all"' + (selPB.length ? '' : ' checked') + '> Todos os nadadores com RP carregados (' + withPB.length + ')</label></p><p><label class="chk"><input type="checkbox" id="cl_link"> Remover também o link do SwimRankings</label></p><p class="muted">Os resultados e os RP já preenchidos nas competições não são alterados.</p>', () => {
+    const w = ($('input[name=clw]:checked', m) || {}).value; const ids = w === 'sel' ? selPB : withPB.map(a => a.id); const link = $('#cl_link', m).checked;
+    if (!ids.length) return false;
+    if (!confirm('Limpar os recordes pessoais de ' + ids.length + ' nadador(es)' + (link ? ' e remover o link' : '') + '?')) return false;
+    ids.forEach(id => { const a = C.athById(db, id); delete a.srPB; if (link) delete a.srId; });
+    save('sr-clear', ids.length + ' nadadores'); toast('Recordes pessoais limpos em ' + ids.length + ' nadador(es).'); route();
+  }, 'Limpar');
+}
+
 /* ---------- arranque ---------- */
 async function init() {
   try {
@@ -4861,7 +4929,7 @@ async function init() {
   window.addEventListener('hashchange', route);
   route();
 }
-window.FPNApp = { get db() { return db; }, route, exportReport, get letterhead() { return letterhead; } };
+window.FPNApp = { get db() { return db; }, route, srReadPaste: (h, t) => srReadPaste(h, t), exportReport, get letterhead() { return letterhead; } };
 document.addEventListener('DOMContentLoaded', () => { try { LH.makeIcons(); } catch (e) {} init(); });
 })();
 </script>
