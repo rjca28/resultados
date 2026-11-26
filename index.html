@@ -1663,6 +1663,14 @@ function applyConvocatoria(db, conv, opts) {
   if (!db.convocatorias.includes(conv)) db.convocatorias.push(conv);
   return rep;
 }
+/* nadador das Seleções: tem resultados internacionais, está numa convocatória ou foi criado à mão */
+function selecaoSet(db) {
+  const set = new Set();
+  db.results.forEach(r => { if (r.athleteId) set.add(r.athleteId); (r.members || []).forEach(m => set.add(m)); });
+  db.convocatorias.forEach(v => convSwimmers(v).forEach(s => { if (s.athleteId) set.add(s.athleteId); }));
+  db.athletes.forEach(a => { if (a.manual) set.add(a.id); });
+  return set;
+}
 function convOfComp(db, compId) { return db.convocatorias.filter(v => v.compId === compId); }
 function activitiesOfAthlete(db, id) {
   return db.convocatorias.filter(v => convSwimmers(v).some(s => s.athleteId === id)).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
@@ -1925,7 +1933,7 @@ const api = { STROKES, EVENTS, EVENTS_IND, EVENTS_REL, OLYMPIC, PHASES, MEDAL_PH
   findAthlete, ensureAthlete, splitRelayMembers, matchMembers, isTeamName, emptyDB, migrate, logChange, compById, athById, guessPool,
   findCompetition, newCompetition, compPool, lookupRP, sheetRows, importLegacyRows, linkRecord, linkComitiva, enrich, summarize,
   compResults, compSummary, periodsOf, inPeriod, athleteResults, athleteCV, recordsSummary, dashboard, parseLenex, parsePdfLines,
-  resultKey, recKey, nameSim, num, teamKey, rnByCat, compTier, linkPeopleAll, validPersonName, cleanData, mergeAthleteInto, mergeCompInto, parseConvocatoria, applyConvocatoria, convSwimmers, convDays, ensurePerson, convOfComp, activitiesOfAthlete, staffSummary, parsePtDates, bodyChildren, normRole, MESES, daysBetween, fillMissingRP, FORMATOS, nextPhase, currentRecordTable, rnCandidates, rnPending, bumpEdition, duplicateEdition, prevPeriod, currentPeriod, prevEdition, GOAL_KEYS, goalStatus, alerts, ageAt };
+  resultKey, recKey, nameSim, num, teamKey, rnByCat, compTier, selecaoSet, linkPeopleAll, validPersonName, cleanData, mergeAthleteInto, mergeCompInto, parseConvocatoria, applyConvocatoria, convSwimmers, convDays, ensurePerson, convOfComp, activitiesOfAthlete, staffSummary, parsePtDates, bodyChildren, normRole, MESES, daysBetween, fillMissingRP, FORMATOS, nextPhase, currentRecordTable, rnCandidates, rnPending, bumpEdition, duplicateEdition, prevPeriod, currentPeriod, prevEdition, GOAL_KEYS, goalStatus, alerts, ageAt };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Core = api;
 })(this);
 </script>
@@ -3357,20 +3365,25 @@ function viewNadadores(main) {
   const top = h('div', '<h1>Nadadores</h1>', 'vhead'); top.appendChild(periodControls(route)); main.appendChild(top);
   dashNadadores(main);
   main.appendChild(h('div', '<input id="q" placeholder="Procurar nadador ou clube…"><select id="fs"><option value="">Ambos os sexos</option><option value="F">Feminino</option><option value="M">Masculino</option></select><select id="fe"><option value="">Todos os escalões</option>' + C.ESCALOES.map(e => '<option>' + e + '</option>').join('') + '</select><select id="fc"><option value="">Todos os clubes</option>' + [...new Set(db.athletes.map(a => a.club).filter(Boolean))].sort().map(c => '<option>' + esc(c) + '</option>').join('') + '</select><button id="newa" class="pri">Novo nadador</button><button id="mergea">Fundir selecionados</button>', 'toolbar'));
+  const sel = C.selecaoSet(db);
+  const nRec = db.athletes.filter(a => !sel.has(a.id)).length;
+  if (nRec) main.appendChild(h('label', '<input type="checkbox" id="frec"' + (ui.showRecOnly ? ' checked' : '') + '> Mostrar também ' + nRec + ' recordistas sem participação nas Seleções (titulares de recordes de clube)', 'chk'));
   const list = h('div', ''); main.appendChild(list);
   const sm = db.meta.seasonStartMonth;
+  const convIn = id => db.convocatorias.some(v => C.inPeriod(v.start, ui.mode, ui.period, sm) && C.convSwimmers(v).some(s => s.athleteId === id));
   const stats = db.athletes.map(a => { const rs = C.athleteResults(db, a.id).filter(r => C.inPeriod(r.date, ui.mode, ui.period, sm)); const ind = rs.filter(r => r.athleteId === a.id); const s = C.summarize(db, ind);
     const last = rs.map(r => r.date).filter(Boolean).sort().pop(); const rn = db.records.filter(x => x.athleteIds.includes(a.id) && C.inPeriod(x.date, ui.mode, ui.period, sm)).length;
-    return { a, s, n: rs.length, comps: new Set(rs.map(r => r.compId)).size, last, rn, esc: new Set(rs.map(r => r.escalao)) }; });
+    return { a, s, n: rs.length, comps: new Set(rs.map(r => r.compId)).size, last, rn, esc: new Set(rs.map(r => r.escalao)), sel: sel.has(a.id), conv: convIn(a.id) }; });
   const draw = () => {
     const q = C.norm($('#q').value), fs = $('#fs').value, fe = $('#fe').value, fc = $('#fc').value;
-    const rows = stats.filter(x => (ui.period === '*' || x.n || x.rn) && (!q || C.norm(x.a.name + ' ' + (x.a.club || '') + ' ' + (x.a.aliases || []).join(' ')).includes(q)) && (!fs || x.a.sex === fs) && (!fe || x.esc.has(fe)) && (!fc || x.a.club === fc))
+    const rec = $('#frec') && $('#frec').checked;
+    const rows = stats.filter(x => (x.sel ? (ui.period === '*' || x.n || x.conv || (x.a.manual && !x.n)) : (rec && (ui.period === '*' || x.rn))) && (!q || C.norm(x.a.name + ' ' + (x.a.club || '') + ' ' + (x.a.aliases || []).join(' ')).includes(q)) && (!fs || x.a.sex === fs) && (!fe || x.esc.has(fe)) && (!fc || x.a.club === fc))
       .sort((x, y) => y.comps - x.comps || x.a.name.localeCompare(y.a.name));
     list.innerHTML = '<p class="muted">' + rows.length + ' nadadores</p>' + table(['', 'Nadador', 'Sexo', 'Clube', 'Comp.', 'Provas', 'RP', 'Medalhas', 'Final A', 'RN', 'Última competição'], rows.map(x => tr([
-      '<input type="checkbox" data-sel="' + x.a.id + '"' + (ui.athSel.has(x.a.id) ? ' checked' : '') + '>', '<a href="#nadador/' + x.a.id + '">' + esc(x.a.name) + '</a>', x.a.sex || '<span class="warn">?</span>', esc(x.a.club || ''), x.comps, x.s.nados, x.s.rp, medals(x.s), x.s.finalA, x.rn || '', D(x.last)], '', [4, 5, 6, 8, 9])), { num: [4, 5, 6, 8, 9] });
+      '<input type="checkbox" data-sel="' + x.a.id + '"' + (ui.athSel.has(x.a.id) ? ' checked' : '') + '>', '<a href="#nadador/' + x.a.id + '">' + esc(x.a.name) + '</a>' + (x.sel ? '' : ' <span class="tag">só recordes</span>'), x.a.sex || '<span class="warn">?</span>', esc(x.a.club || ''), x.comps, x.s.nados, x.s.rp, medals(x.s), x.s.finalA, x.rn || '', D(x.last)], '', [4, 5, 6, 8, 9])), { num: [4, 5, 6, 8, 9] });
     $$('[data-sel]', list).forEach(cb => cb.onchange = () => { cb.checked ? ui.athSel.add(cb.dataset.sel) : ui.athSel.delete(cb.dataset.sel); });
   };
-  $('#q').oninput = draw; $('#fs').onchange = draw; $('#fe').onchange = draw; $('#fc').onchange = draw; draw();
+  $('#q').oninput = draw; $('#fs').onchange = draw; $('#fe').onchange = draw; $('#fc').onchange = draw; if ($('#frec')) $('#frec').onchange = () => { ui.showRecOnly = $('#frec').checked; draw(); }; draw();
   list.insertAdjacentHTML('beforebegin', '<div class="toolbar">' + exportBar('nad', 'Relatório de nadadores') + '</div>'); bindExport('nad', () => R.nadadoresReport(db, ui.mode, ui.period, { sexo: $('#fs').value, escalao: $('#fe').value, clube: $('#fc').value, q: $('#q').value.trim() }));
   $('#newa').onclick = () => athleteForm(null);
   $('#mergea').onclick = () => {
@@ -3402,7 +3415,7 @@ function athleteForm(a) {
     const o = { name: C.clean($('#a_name').value), sex: $('#a_sex').value, birth: $('#a_birth').value, club: C.clean($('#a_club').value), license: C.clean($('#a_lic').value), aliases: $('#a_al').value.split('|').map(C.clean).filter(Boolean), notes: $('#a_notes').value };
     if (!o.name) { toast('Indique o nome.', true); return false; }
     o.key = C.nameKey(o.name);
-    let t = a; if (a) Object.assign(a, o); else { t = Object.assign({ id: C.uid('a') }, o); db.athletes.push(t); }
+    let t = a; if (a) Object.assign(a, o); else { t = Object.assign({ id: C.uid('a'), manual: true }, o); db.athletes.push(t); }
     save(a ? 'edit-athlete' : 'new-athlete', o.name); go('nadador/' + t.id);
   });
 }
