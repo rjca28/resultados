@@ -671,7 +671,7 @@ function norm(s) {
   return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
     .replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
-function tokens(s) { return norm(s).split(' ').filter(Boolean); }
+function tokens(s) { return norm(s).split(' ').filter(t => t && !/^\d+$/.test(t)); }
 function clean(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
 function round2(x) { return Math.round(x * 100) / 100; }
 
@@ -869,7 +869,7 @@ function findAthlete(db, name, sex) {
   return { athlete: bs >= 0.85 ? best : null, candidate: best, score: bs };
 }
 function ensureAthlete(db, name, extra) {
-  extra = extra || {};
+  extra = extra || {}; name = stripMarks(name);
   const f = findAthlete(db, name, extra.sex);
   if (f.athlete) {
     const a = f.athlete;
@@ -926,6 +926,7 @@ function migrate(db) {
   for (const k of Object.keys(e)) if (db[k] == null) db[k] = e[k];
   for (const k of Object.keys(e.meta)) if (db.meta[k] === undefined) db.meta[k] = e.meta[k];
   if (!db.meta.cleanV || db.meta.cleanV < 4) cleanData(db);
+  if (db.meta.cleanV < 5) cleanDataV5(db);
   return db;
 }
 /* Limpeza de falhas herdadas dos ficheiros de origem */
@@ -933,7 +934,7 @@ function mergeAthleteInto(db, keep, a) {
   db.results.forEach(r => { if (r.athleteId === a.id) r.athleteId = keep.id; r.members = (r.members || []).map(m => m === a.id ? keep.id : m); });
   db.records.forEach(r => { r.athleteIds = r.athleteIds.map(m => m === a.id ? keep.id : m); });
   db.refMarks.forEach(m => { if (m.athleteId === a.id) m.athleteId = keep.id; });
-  (db.convocatorias || []).forEach(c => (c.swimmers || []).forEach(sw => { if (sw.athleteId === a.id) sw.athleteId = keep.id; }));
+  (db.convocatorias || []).forEach(c => (c.groups || []).forEach(g => (g.swimmers || []).forEach(sw => { if (sw.athleteId === a.id) sw.athleteId = keep.id; })));
   keep.aliases = [...new Set([...(keep.aliases || []), a.name, ...(a.aliases || [])])].filter(x => x !== keep.name);
   for (const k of ['sex', 'birth', 'club', 'license']) if (!keep[k] && a[k]) keep[k] = a[k];
   db.athletes = db.athletes.filter(x => x.id !== a.id);
@@ -1020,6 +1021,46 @@ function cleanData(db) {
     if (best && best !== a.name && (freq[best] || 0) > (freq[a.name] || 0)) { a.aliases = [...new Set([...(a.aliases || []), a.name])].filter(x => x !== best); a.name = best; a.key = nameKey(best); }
   }
   db.meta.cleanV = 4;
+  return rep;
+}
+/* v5: limpeza de restos de importações de convocatórias (marcas de viagem nos nomes, estafetas como nadadores, pessoas duplicadas) */
+const JUNK_SWIMMER = /^(estafetas?|masculin[oa]s?|feminin[oa]s?|mist[oa]s?|clube|provas|nadadores?)$/i;
+function cleanDataV5(db) {
+  const rep = { athletes: 0, people: 0, swimmers: 0, comps: 0 };
+  for (const v of db.convocatorias || []) for (const g of v.groups || []) {
+    const n0 = g.swimmers.length;
+    g.swimmers = g.swimmers.filter(sw => !JUNK_SWIMMER.test(clean(sw.name)));
+    rep.swimmers += n0 - g.swimmers.length;
+    g.swimmers.forEach(sw => { const n = stripMarks(sw.name); if (n !== sw.name) { if (!sw.travel) sw.travel = (String(sw.name).match(/\(([\d,\s]+)\)/) || [])[1] || ''; sw.name = n; } });
+  }
+  for (const a of db.athletes.slice()) {
+    if (JUNK_SWIMMER.test(clean(a.name)) && !db.results.some(r => r.athleteId === a.id || (r.members || []).includes(a.id))) { db.athletes = db.athletes.filter(x => x !== a); rep.athletes++; continue; }
+    const n = stripMarks(a.name); if (n !== a.name) { a.name = n; a.key = nameKey(n); }
+    a.aliases = [...new Set((a.aliases || []).map(stripMarks).filter(x => x && !/[()]/.test(x) && x !== a.name))];
+  }
+  const ids = new Set(db.athletes.map(a => a.id));
+  for (const v of db.convocatorias || []) for (const g of v.groups || []) for (const sw of g.swimmers) if (sw.athleteId && !ids.has(sw.athleteId)) sw.athleteId = null;
+  rep.athletes += mergeDupAthletes(db);
+  for (const v of db.convocatorias || []) for (const g of v.groups || []) for (const sw of g.swimmers) if (!sw.athleteId) { const f = findAthlete(db, sw.name, sw.sex); if (f.athlete) sw.athleteId = f.athlete.id; }
+  // pessoas (staff)
+  for (const p of db.people || []) p.name = stripMarks(String(p.name).replace(/\s*\(\s*[\d,]*\s*$/, ''));
+  for (const p of (db.people || []).slice()) {
+    if (!db.people.includes(p)) continue;
+    for (const q of db.people.slice()) {
+      if (q === p || !db.people.includes(q) || norm(q.name) !== norm(p.name)) continue;
+      p.roles = [...new Set([...(p.roles || []), ...(q.roles || [])])]; if (!p.club && q.club) p.club = q.club;
+      (db.convocatorias || []).forEach(v => (v.staff || []).forEach(s => { if (s.personId === q.id) s.personId = p.id; }));
+      db.people = db.people.filter(x => x !== q); rep.people++;
+    }
+  }
+  for (const v of db.convocatorias || []) for (const s of v.staff || []) { const n = stripMarks(String(s.name).replace(/\s*\(\s*[\d,]*\s*$/, '')); if (n !== s.name) s.name = n; }
+  // competições sem data, sem resultados e sem convocatória: restos de importações
+  for (const c of db.competitions.slice()) {
+    if (c.start || db.results.some(r => r.compId === c.id) || (db.convocatorias || []).some(v => v.compId === c.id)) continue;
+    db.comitivas.forEach(k => { if (k.compId === c.id) k.compId = null; });
+    db.competitions = db.competitions.filter(x => x !== c); rep.comps++;
+  }
+  db.meta.cleanV = 5;
   return rep;
 }
 function logChange(db, action, detail) {
@@ -1516,114 +1557,160 @@ function parsePtDates(text) {
   if (m && MESES[m[2]]) { const iso = m[3] + '-' + String(MESES[m[2]]).padStart(2, '0') + '-' + m[1].padStart(2, '0'); return { start: iso, end: iso }; }
   return { start: null, end: null };
 }
-function escFromLabel(s) { const e = escFromCode(s, s); return e || ''; }
+function escFromLabel(s) { if (/_PA\b|promessas/i.test(s)) return ''; const e = escFromCode(s, s); return e || ''; }
 const STOP_STAFF = /^(alojamento|concentra|importante|nota|plano de viagem|observa)/i;
-function parseStaffLine(line) {
-  const m = line.match(/^([^:]{2,70}):\s*(.+)$/); if (!m) return [];
-  const role = clean(m[1]); if (/^(fpn|nota)/i.test(role) || /^https?$/i.test(role)) return [];
-  const list = m[2].replace(/,?\s+e\s+(?=[A-ZÀ-Ý])/g, ', ').split(/\s*[,;]\s*/).map(clean).filter(Boolean);
+function stripMarks(x) { return clean(String(x).replace(/\s*\((?:\s*\d+\s*,?)+\)/g, ' ').replace(/\s*\(\*\)|\s*\*\d*\s*$/g, ' ')); }
+function travelMarks(x) { const m = String(x).match(/\(((?:\s*\d+\s*,?)+)\)/g); return m ? m.map(z => z.replace(/[()\s]/g, '')).join(',') : ''; }
+function parseStaffLine(line, roleHint) {
+  let role, rest;
+  const m = line.match(/^([^:]{2,70}):\s*(.*)$/);
+  if (m) { role = clean(m[1]); rest = m[2]; } else if (roleHint) { role = roleHint; rest = line; } else return [];
+  if (/^(fpn|nota)/i.test(role) || /^https?$/i.test(role) || !rest) return [];
+  const period = (rest.match(/\((\d{1,2}(?:-\d{1,2})?\s+(?:a\s+\d{1,2}\s+)?(?:de\s+)?[a-zç]+(?:\s+de\s+\d{4})?)\)/i) || [])[1] || '';
+  rest = rest.replace(/\(((?:\s*\d+\s*,)+\s*\d+\s*)\)/g, (a, d) => '(' + d.replace(/\s|,/g, m => m === ',' ? '|' : '') + ')');
+  const list = rest.replace(/–\s*\d{1,2}\s+[a-z]+\s+a\s+\d{1,2}\s+[a-z]+.*$/i, '').replace(/,?\s+e\s+(?=[A-ZÀ-Ý])/g, ', ').split(/\s*[,;]\s*/).map(clean).filter(Boolean);
   return list.map(x => {
-    let travel = ''; let club = '';
-    x = x.replace(/\((\d)\)/g, (a, d) => { travel = d; return ''; });
-    x = x.replace(/\(([^)]+)\)/g, (a, c) => { club = clean(c); return ''; });
-    return { role: normRole(role), name: clean(x), club, travel };
-  }).filter(x => x.name && x.name.split(' ').length >= 2);
+    const travel = travelMarks(x.replace(/\|/g, ',')); let club = '';
+    x = x.replace(/\((?:\s*\d+\s*[,|]?)+\)/g, '').replace(/^\d{3}(?=[A-ZÀ-Ý])/, '');
+    x = x.replace(/\(([^)]+)\)/g, (a, c) => { if (!/\d/.test(c)) club = clean(c); return ''; }).replace(/\*/g, '');
+    if (/^fpn$/i.test(club)) club = 'FPN';
+    return { role: normRole(role), name: clean(x), club, travel, period };
+  }).filter(x => x.name && x.name.split(' ').length >= 2 && x.name.split(' ').length <= 5 && !/^(a definir|definidos)/i.test(x.name));
 }
 function normRole(r) {
   const n = norm(r);
-  if (/responsavel|chefe/.test(n)) return 'Responsável da delegação';
+  if (/chefe de missao/.test(n)) return clean(r);
+  if (/responsave|chefe/.test(n)) return 'Responsável da delegação';
+  if (/ctar/.test(n) && /treinador/.test(n)) return 'Treinador CTAR Coimbra';
+  if (/car jamor/.test(n) && /treinador/.test(n)) return 'Treinador CAR Jamor';
+  if (/car rio maior/.test(n) && /treinador/.test(n)) return 'Treinador CAR Rio Maior';
   if (/convidad/.test(n)) return 'Treinador convidado';
-  if (/fisio/.test(n)) return 'Fisioterapeuta';
+  if (/fisioterap/.test(n)) return 'Fisioterapeuta';
+  if (/prepara.*fisic|fisiolog/.test(n)) return 'Preparação Física';
   if (/medic/.test(n)) return 'Médico';
   if (/treinador/.test(n)) return clean(r).replace(/^Treinadores/, 'Treinador');
   return clean(r);
 }
-function parseConvocatoria(xml) {
-  const kids = bodyChildren(xml);
+const CONV_TITLE_KW = /est[aá]gio|campeonato|championships|meeting|trofe[uo]|challenge|games|jogos|cup|open|torneio|internazionali|mare nostrum|festival/i;
+const CODE_RE = /\b[A-Z]?\d{0,2}_AS_[A-Za-z0-9]+\b/g;
+function convNameFix(n) {
+  n = stripMarks(n).replace(/\s*\*+\s*$/, '');
+  if (/^[A-ZÀ-Ý' -]{2,},\s*\S/.test(n)) n = reorderName(n);
+  return clean(n);
+}
+/* divide o documento em atividades (um documento pode trazer estágio + competição, etc.) */
+function convSections(kids) {
+  const idx = [];
+  const texts = kids.map(k => k.t === 'p' ? k.text : '');
+  for (let i = 0; i < kids.length; i++) {
+    const t = texts[i]; if (!t || t.length < 20 || t.length > 260) continue;
+    if (/^\d|^(concentra|nota|aeroporto|\d{1,2} de [a-z]+ de \d{4}:|alojamento|in[ií]cio|final)/i.test(t)) continue;
+    if (!parsePtDates(t).start) continue;
+    if (!(CONV_TITLE_KW.test(t) || (t.match(CODE_RE) || []).length)) continue;
+    const next = texts.slice(i + 1, i + 5).join(' | ');
+    if (/selecionad|realiza-se|convocad|seleção .*\(|promessas aquáticas \(/i.test(next)) idx.push(i);
+  }
+  if (!idx.length) return [kids];
+  if (idx[0] > 3) idx[0] = 0;
+  return idx.map((st, j) => kids.slice(j ? st : 0, idx[j + 1] || kids.length));
+}
+function parseConvSection(kids) {
   const conv = { id: uid('v'), tipo: 'Competição', title: '', name: '', local: '', country: '', start: null, end: null, codes: [], intro: '', groups: [], staff: [], logistics: [], flights: [], notes: [], compId: null, comitivaIds: [], source: 'docx' };
-  let stage = 'head', group = null;
+  let stage = 'head', group = null, roleHint = '';
   const groupOf = (label, code) => { let g = conv.groups.find(x => x.code === code && x.label === label); if (!g) { g = { label, code, escalao: escFromLabel(code + ' ' + label), swimmers: [] }; conv.groups.push(g); } return g; };
+  const addStaff = list => { for (const st of list) { const ex = conv.staff.find(x => norm(x.name) === norm(st.name)); if (ex) { if (st.role && ex.role !== st.role && !/convidado/.test(st.role)) ex.role = ex.role; if (!ex.club && st.club) ex.club = st.club; if (st.travel && !ex.travel) ex.travel = st.travel; } else conv.staff.push(st); } };
   for (const k of kids) {
     if (k.t === 'p') {
       const t = k.text; if (!t) continue;
-      if (stage === 'head') {
-        if (/^nata[cç][aã]o pura$/i.test(t)) continue;
-        if (!conv.title) {
-          conv.title = t;
-          const codes = t.match(/\b[A-Z]\d{0,2}_[A-Z0-9_]+\b/g) || []; conv.codes = codes;
-          const ctry = t.match(/\(([A-Z]{3})\)/); if (ctry) conv.country = ctry[1];
-          const d = parsePtDates(t); conv.start = d.start; conv.end = d.end;
-          let base = t.replace(/\([A-Z]\d{0,2}_[A-Z0-9_]+\)/g, '').trim();
-          const parts = base.split(/\s+[–-]\s+/);
-          conv.name = clean(parts[0]);
-          if (parts.length > 1) conv.local = clean(parts.slice(1).join(' - ').split(/\s*\(|,/)[0]);
-          conv.tipo = /est[aá]gio/i.test(t) || (codes[0] || '').startsWith('E') ? 'Estágio' : 'Competição';
-          continue;
-        }
-        if (/estão selecionados|selecionados os seguintes/i.test(t)) { stage = 'sel'; continue; }
-        if (!conv.intro && !/^(alojamento|concentra|importante|nota)/i.test(t)) { conv.intro = t; continue; }
+      if (/^nata[cç][aã]o pura$/i.test(t)) continue;
+      if (!conv.title) {
+        conv.title = t;
+        const codes = (t.match(CODE_RE) || []); conv.codes = [...new Set(codes)];
+        const ctry = t.match(/\(([A-Z]{3})\)/); if (ctry) conv.country = ctry[1];
+        const d = parsePtDates(t); conv.start = d.start; conv.end = d.end;
+        let base = t.replace(/\([^)]*_AS_[^)]*\)/g, '').replace(/\s+-\s+Sele[cç][aã]o.*$/i, '').replace(/\s+–\s+Sele[cç][aã]o.*$/i, '').trim();
+        const parts = base.split(/\s+[–-]\s+/);
+        conv.name = clean(parts[0].replace(/,\s*\d{1,2}\s+(?:a|e)\s+\d.*$/, '').replace(/,\s*\d{1,2} de .*$/, '').replace(/\s*\(\w{3}\)\s*$/, ''));
+        if (parts.length > 1) { const loc = parts.slice(1).find(p => /\([A-Z]{3}\)/.test(p)) || parts.slice(1).find(p => !/\d/.test(p)) || parts[1]; conv.local = clean(loc.split(/\s*\(|,/)[0].replace(/\s+\d{4}$/, '')); }
+        const lm = t.match(/\(([^()]*?)\)\s*$/); if (!conv.local && lm && !/_AS_/.test(lm[1])) conv.local = clean(lm[1]);
+        if (!conv.local) { const cm = t.match(/,\s*([A-ZÀ-Ýa-zà-ý .-]+)\s*\(([A-Z]{3})\)/); if (cm) conv.local = clean(cm[1]); }
+        conv.tipo = /est[aá]gio/i.test(t) || /^E\d/.test(conv.codes[0] || '') ? 'Estágio' : 'Competição';
+        continue;
       }
-      if (/enquadramento t[eé]cnico/i.test(t)) { stage = 'staff'; continue; }
-      if (stage === 'sel') {
-        const cm = t.match(/^(.*)\(([A-Z]\d{0,2}_[A-Z0-9_]+)\)\s*$/);
-        if (cm) { group = groupOf(clean(cm[1]), cm[2]); continue; }
-      }
+      const gh = t.match(/^((?:Sele[cç][aã]o|Promessas)[^()]*)\(([^)]*_AS_[^)]*)\)\s*$/i);
+      if (gh) { group = groupOf(clean(gh[1]), clean(gh[2])); stage = 'sel'; roleHint = ''; continue; }
+      if (/estão selecionados|selecionados os seguintes|estão convocados|está convocado/i.test(t)) { stage = 'sel'; continue; }
+      if (stage === 'head' && !conv.intro && !/^(alojamento|concentra|importante|nota|realiza-se)/i.test(t)) { conv.intro = t; continue; }
+      if (/enquadramento t[eé]cnico/i.test(t)) { stage = 'staff'; roleHint = ''; continue; }
       if (stage === 'staff') {
-        if (STOP_STAFF.test(t) && !/^nota:\s*os treinadores/i.test(t)) stage = 'tail';
-        else { const st = parseStaffLine(t); if (st.length) { conv.staff.push(...st); continue; } if (/^fpn:?$/i.test(t)) continue; conv.notes.push(t); continue; }
+        if (STOP_STAFF.test(t) && !/^nota:\s*os treinadores/i.test(t)) { stage = 'tail'; }
+        else {
+          if (/^[^:]{2,60}:\s*$/.test(t)) { roleHint = clean(t.replace(/:\s*$/, '')); if (/^fpn$/i.test(roleHint)) roleHint = ''; continue; }
+          const st = parseStaffLine(t, roleHint); if (st.length) { addStaff(st); continue; }
+          if (/^nota:\s*os treinadores/i.test(t)) continue;
+          conv.notes.push(t); continue;
+        }
       }
-      if (/^nota\s*\d*\s*:/i.test(t)) conv.notes.push(t);
+      if (/^nota\s*\d*\s*:|^\*/i.test(t)) conv.notes.push(t);
       else if (/^https?:\/\//i.test(t) && conv.notes.length) conv.notes[conv.notes.length - 1] += ' ' + t;
       else conv.logistics.push(t);
     } else {
       const rows = tableRows(k.xml);
       const flat = rows.map(r => r.map(c => c.text).join(' ')).join(' ');
       if (!/femininos|masculinos/i.test(flat)) { conv.flights.push(...rows.map(r => r.map(c => c.text))); continue; }
-      if (!group) group = groupOf(conv.codes.length ? '' : conv.name, conv.codes[0] || '');
+      if (!group) group = groupOf(conv.codes.length > 1 ? '' : '', conv.codes[0] || '');
       let cols = null, sub = '';
       const year = (conv.start || '').slice(0, 4) || String(new Date().getFullYear());
       for (const r of rows) {
         const txt = r.map(c => c.text);
         const nonEmpty = r.filter(c => c.text);
+        if (/^estafetas?$/i.test(txt[0] || '')) { cols = null; continue; }
         if (txt.some(x => /^(femininos|masculinos)$/i.test(x))) {
           const hasDates = txt.some(x => /^\d{1,2}\/\d{1,2}$/.test(x));
           const prev = cols;
-          cols = { names: [], days: [] };
+          cols = { names: [], days: prev && !hasDates ? prev.days : [] };
           for (const c of r) {
             if (/^femininos$/i.test(c.text)) cols.names.push({ col: c.col, sex: 'F' });
             else if (/^masculinos$/i.test(c.text)) cols.names.push({ col: c.col, sex: 'M' });
             else if (/^\d{1,2}\/\d{1,2}$/.test(c.text)) { const [d, mo] = c.text.split('/'); cols.days.push({ col: c.col, date: year + '-' + mo.padStart(2, '0') + '-' + d.padStart(2, '0') }); }
           }
-          if (!hasDates && prev && prev.days.length && /provas/i.test(txt.join(' '))) cols.days = [];
+          if (!hasDates && !/provas/i.test(txt.join(' '))) cols.days = [];
           if (/provas/i.test(txt.join(' ')) || hasDates) conv.withEvents = true;
           continue;
         }
         if (!cols) continue;
+        if (!txt[0] && txt.slice(1).some(x => /^\d{1,2}\/\d{1,2}$/.test(x))) {
+          cols.days = [];
+          for (const c of r) if (/^\d{1,2}\/\d{1,2}$/.test(c.text)) { const [d, mo] = c.text.split('/'); cols.days.push({ col: c.col, date: year + '-' + mo.padStart(2, '0') + '-' + d.padStart(2, '0') }); }
+          continue;
+        }
         if (nonEmpty.length === 1 && !cols.names.some(n => n.col === nonEmpty[0].col && r.length > 2)) { sub = clean(nonEmpty[0].text); continue; }
         for (const n of cols.names) {
-          const cell = r.find(c => c.col === n.col); if (!cell || !cell.text) continue;
+          const cell = r.find(c => c.col === n.col); if (!cell || !cell.text || /^(clube|provas)$/i.test(cell.text)) continue;
           const clubCell = r.find(c => c.col > n.col && !cols.names.some(x => x.col === c.col) && !cols.days.some(d => d.col === c.col));
           const events = [];
           for (const d of cols.days) {
-            const c = r.find(x => x.col === d.col); if (!c || !c.text) continue;
-            for (const e of c.text.split(/[\n,;\/]+/).map(clean).filter(Boolean)) events.push({ date: d.date, event: eventLabel(e) });
+            const c = r.find(x => x.col === d.col); if (!c || !c.text || /^[-—]$/.test(c.text.trim())) continue;
+            for (const e of c.text.replace(/(\d{2,4})\s*([LCBMElcbme])\b/g, '$1 $2').split(/[\n,;\/]+|\s+(?=\d+\s*x?\s*\d*\s*[LCBME]\b)/).map(clean).filter(x => x && x !== '-' && x !== '—')) events.push({ date: d.date, event: eventLabel(e.replace(/\(E\)/i, '').trim()), raw: e });
           }
-          group.swimmers.push({ name: clean(cell.text), club: clubCell ? clean(clubCell.text) : '', sex: n.sex, sub, events, athleteId: null });
+          group.swimmers.push({ name: convNameFix(cell.text), club: clubCell ? clean(clubCell.text) : '', sex: n.sex, sub, events, athleteId: null, travel: travelMarks(cell.text), note: /\*/.test(cell.text) ? 'ver nota' : '' });
         }
       }
       if (conv.groups.length > 1 || conv.codes.length > 1) group = null;
     }
   }
   if (!conv.groups.length && conv.codes.length) conv.groups.push({ label: '', code: conv.codes[0], escalao: escFromLabel(conv.codes[0]), swimmers: [] });
-  for (const g of conv.groups) if (!g.escalao) g.escalao = escFromLabel(g.label) || 'Sénior';
+  for (const g of conv.groups) { if (!g.code && conv.codes.length === 1) g.code = conv.codes[0]; if (!g.escalao) g.escalao = /_PA\b|promessas/i.test(g.code + ' ' + g.label) ? '' : escFromLabel(g.code + ' ' + g.label + ' ' + conv.title) || 'Sénior'; }
   if (!conv.codes.length) conv.codes = conv.groups.map(g => g.code).filter(Boolean);
-  if (!conv.tipo || (conv.codes[0] || '').startsWith('E')) conv.tipo = (conv.codes[0] || '').startsWith('E') ? 'Estágio' : conv.tipo;
+  if (/^E\d/.test(conv.codes[0] || '')) conv.tipo = 'Estágio';
   return conv;
 }
+function parseConvocatorias(xml) { return convSections(bodyChildren(xml)).map(parseConvSection).filter(c => c.title); }
+function parseConvocatoria(xml) { return parseConvocatorias(xml)[0]; }
 function convSwimmers(conv) { const out = []; for (const g of conv.groups) for (const s of g.swimmers) out.push(Object.assign({ group: g }, s)); return out; }
 function convDays(conv) { if (!conv.start) return 0; return daysBetween(conv.start, conv.end || conv.start) + 1; }
 function ensurePerson(db, name, extra) {
-  extra = extra || {};
+  extra = extra || {}; name = stripMarks(String(name).replace(/\s*\(\s*[\d,]*\s*$/, ''));
   const key = nameKey(name);
   let p = db.people.find(x => nameKey(x.name) === key) || db.people.find(x => nameScore(x.name, name) >= 0.95);
   if (!p) { p = { id: uid('p'), name: clean(name), club: extra.club || '', roles: [], notes: '' }; db.people.push(p); }
@@ -1654,9 +1741,19 @@ function applyConvocatoria(db, conv, opts) {
   const days = convDays(conv);
   conv.comitivaIds = conv.comitivaIds || [];
   conv.groups.forEach((g, i) => {
-    let k = db.comitivas.find(x => conv.comitivaIds.includes(x.id) && x.code === g.code) || db.comitivas.find(x => x.code && x.code === g.code && x.start === conv.start);
+    const near = x => x.start && conv.start && Math.abs(daysBetween(x.start, conv.start)) <= 10;
+    let k = db.comitivas.find(x => conv.comitivaIds.includes(x.id) && x.code === g.code) || db.comitivas.find(x => x.code && x.code === g.code && (x.start === conv.start || near(x))) ||
+      (conv.groups.length === 1 ? db.comitivas.find(x => conv.comitivaIds.includes(x.id) && !x.code) : null);
+    const isNew = !k;
     if (!k) { k = { id: uid('k'), tipo: conv.tipo, name: conv.name, start: conv.start, end: conv.end, code: g.code, escalao: g.escalao, nadadores: null, staff: null, dias: null, despesa: null, compId: null, local: conv.local }; db.comitivas.push(k); }
-    Object.assign(k, { tipo: conv.tipo, name: conv.name, start: conv.start, end: conv.end, escalao: g.escalao || k.escalao, nadadores: g.swimmers.length, staff: i === 0 ? conv.staff.length : 0, dias: days || k.dias, compId: conv.compId || null, local: conv.local, convId: conv.id });
+    if (isNew || !k.convId || k.convId === conv.id && opts.refresh) {
+      // comitiva nova (ou criada por esta convocatória): segue a convocatória
+      Object.assign(k, { tipo: conv.tipo, name: conv.name, start: conv.start, end: conv.end, escalao: g.escalao || k.escalao, nadadores: g.swimmers.length, staff: i === 0 ? conv.staff.length : 0, dias: days || k.dias, compId: conv.compId || k.compId || null, local: conv.local, convId: conv.id });
+    }
+    // comitiva já registada (ex.: folha de comitivas): mantém datas, dias, despesa e contagens; só completa o que falta
+    if (!k.code && g.code) k.code = g.code;
+    for (const [f, v] of [['name', conv.name], ['start', conv.start], ['end', conv.end], ['escalao', g.escalao], ['local', conv.local], ['dias', days || null], ['nadadores', g.swimmers.length], ['staff', i === 0 ? conv.staff.length : 0]]) if ((k[f] == null || k[f] === '') && v != null && v !== '') k[f] = v;
+    k.tipo = conv.tipo; k.convId = conv.id; if (conv.compId) k.compId = conv.compId;
     if (!conv.comitivaIds.includes(k.id)) conv.comitivaIds.push(k.id);
     if (conv.tipo === 'Estágio' && i === 0) rep.estagio = k;
   });
@@ -1933,7 +2030,7 @@ const api = { STROKES, EVENTS, EVENTS_IND, EVENTS_REL, OLYMPIC, PHASES, MEDAL_PH
   findAthlete, ensureAthlete, splitRelayMembers, matchMembers, isTeamName, emptyDB, migrate, logChange, compById, athById, guessPool,
   findCompetition, newCompetition, compPool, lookupRP, sheetRows, importLegacyRows, linkRecord, linkComitiva, enrich, summarize,
   compResults, compSummary, periodsOf, inPeriod, athleteResults, athleteCV, recordsSummary, dashboard, parseLenex, parsePdfLines,
-  resultKey, recKey, nameSim, num, teamKey, rnByCat, compTier, selecaoSet, linkPeopleAll, validPersonName, cleanData, mergeAthleteInto, mergeCompInto, parseConvocatoria, applyConvocatoria, convSwimmers, convDays, ensurePerson, convOfComp, activitiesOfAthlete, staffSummary, parsePtDates, bodyChildren, normRole, MESES, daysBetween, fillMissingRP, FORMATOS, nextPhase, currentRecordTable, rnCandidates, rnPending, bumpEdition, duplicateEdition, prevPeriod, currentPeriod, prevEdition, GOAL_KEYS, goalStatus, alerts, ageAt };
+  resultKey, recKey, nameSim, num, teamKey, rnByCat, compTier, selecaoSet, linkPeopleAll, validPersonName, cleanData, mergeAthleteInto, mergeCompInto, parseConvocatoria, parseConvocatorias, cleanDataV5, mergeAthleteInto: mergeAthleteInto, findAthlete, ensureAthlete, nameScore, nameKey, reorderName, stripMarks, applyConvocatoria, convSwimmers, convDays, ensurePerson, convOfComp, activitiesOfAthlete, staffSummary, parsePtDates, bodyChildren, normRole, MESES, daysBetween, fillMissingRP, FORMATOS, nextPhase, currentRecordTable, rnCandidates, rnPending, bumpEdition, duplicateEdition, prevPeriod, currentPeriod, prevEdition, GOAL_KEYS, goalStatus, alerts, ageAt };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Core = api;
 })(this);
 </script>
